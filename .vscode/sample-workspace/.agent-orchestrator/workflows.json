@@ -1,0 +1,84 @@
+{
+  "$schema": "./runtime/workflow.schema.json",
+  "version": 1,
+  "id": "default",
+  "name": "PR security pipeline",
+  "createdAt": "2026-04-29T00:00:00Z",
+  "updatedAt": "2026-04-29T00:00:00Z",
+  "settings": {
+    "dailyHandoffCap": 200,
+    "concurrencyLimit": 2,
+    "ledgerRetentionDays": 30
+  },
+  "nodes": [
+    {
+      "id": "sec",
+      "label": "SecAgent",
+      "agent": "security-reviewer",
+      "trigger": {
+        "type": "ghPr",
+        "repo": "owner/repo",
+        "events": ["opened", "synchronize"],
+        "branchFilter": null
+      },
+      "context": "You are a security engineer. The orchestrator delivered a GitHub PR snapshot to your inbox. Review the PR diff for security issues (auth, secrets, injection, deserialization, dangerous defaults). When done, hand off your findings to the `pm` node using the orchestrator's <<HANDOFF target=pm>>{...}<<END>> protocol. Payload schema: {\"findings\":[{\"severity\":\"critical|high|medium|low|info\",\"file\":\"...\",\"line\":0,\"description\":\"...\",\"recommendation\":\"...\"}],\"prNumber\":42,\"prUrl\":\"...\"}.",
+      "position": { "x": 80, "y": 80 },
+      "enabled": true
+    },
+    {
+      "id": "pm",
+      "label": "PMAgent",
+      "agent": "product-manager",
+      "trigger": { "type": "handoff" },
+      "context": "You are a product manager. When findings arrive from the `sec` node (in your incoming handoffs), create one task per finding in Monday.com (use the Monday MCP if installed; otherwise list what would be created). Prioritize by severity (critical > high > medium > low > info). Add status notes on the PR URL. No outgoing handoff needed — the LeadDev node polls Monday on its own timer.",
+      "position": { "x": 380, "y": 260 },
+      "enabled": true
+    },
+    {
+      "id": "leadDev",
+      "label": "LeadDevAgent",
+      "agent": "senior-engineer",
+      "trigger": { "type": "timer", "cron": "*/27 * * * *", "tz": "local" },
+      "context": "You are a senior engineer. Check Monday.com for open items (use the Monday MCP if installed). Pick the highest-priority item, implement it, and update the Monday status and notes. If no items are open, do nothing and return silently.",
+      "position": { "x": 680, "y": 80 },
+      "enabled": true
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_sec_pm",
+      "from": "sec",
+      "to": "pm",
+      "payloadSchema": {
+        "type": "object",
+        "required": ["findings"],
+        "properties": {
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["severity", "description"],
+              "properties": {
+                "severity": { "enum": ["critical", "high", "medium", "low", "info"] },
+                "file": { "type": "string" },
+                "line": { "type": "integer" },
+                "description": { "type": "string" },
+                "recommendation": { "type": "string" }
+              }
+            }
+          },
+          "prNumber": { "type": "integer" },
+          "prUrl": { "type": "string", "format": "uri" }
+        }
+      },
+      "via": null
+    },
+    {
+      "id": "e_pm_leadDev",
+      "from": "pm",
+      "to": "leadDev",
+      "payloadSchema": null,
+      "via": "monday"
+    }
+  ]
+}

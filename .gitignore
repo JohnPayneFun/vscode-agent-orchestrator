@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.vsix
+.DS_Store
+*.log
+
+# Runtime state — only workflows.json should be committed inside .agent-orchestrator/
+.agent-orchestrator/inbox/
+.agent-orchestrator/outbox/
+.agent-orchestrator/ledger.jsonl
+.agent-orchestrator/triggers/
+.agent-orchestrator/runtime/

@@ -1,0 +1,101 @@
+{
+  "name": "vscode-agent-orchestrator",
+  "displayName": "Agent Orchestrator",
+  "description": "Graph-based orchestrator for multi-agent workflows in VS Code. Native chat participants per node, file-based handoff, GitHub-PR / timer / message triggers — works with any model the chat picker exposes.",
+  "version": "0.1.0",
+  "publisher": "jpc-local",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "agent",
+    "orchestrator",
+    "workflow",
+    "chat-participant",
+    "multi-agent"
+  ],
+  "activationEvents": [
+    "onChatParticipant:vscode-agent-orchestrator.main",
+    "onCommand:vscodeAgentOrchestrator.openGraph",
+    "onCommand:vscodeAgentOrchestrator.runNode",
+    "workspaceContains:.agent-orchestrator/workflows.json"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "vscodeAgentOrchestrator.openGraph", "title": "Agent Orchestrator: Open Graph Editor" },
+      { "command": "vscodeAgentOrchestrator.runNode", "title": "Agent Orchestrator: Run Node Manually" },
+      { "command": "vscodeAgentOrchestrator.tailLedger", "title": "Agent Orchestrator: Tail Ledger" },
+      { "command": "vscodeAgentOrchestrator.emergencyStop", "title": "Agent Orchestrator: Emergency Stop (disable all triggers)" }
+    ],
+    "chatParticipants": [
+      {
+        "id": "vscode-agent-orchestrator.main",
+        "name": "orchestrator",
+        "fullName": "Agent Orchestrator",
+        "description": "Run a node from your workflow graph. Use /run <node-id> ...",
+        "isSticky": true,
+        "commands": [
+          { "name": "run", "description": "Run a node by id from the active workflow (e.g. /run sec)" },
+          { "name": "list", "description": "List nodes defined in the active workflow" }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Agent Orchestrator",
+      "properties": {
+        "vscodeAgentOrchestrator.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, all triggers are disabled."
+        },
+        "vscodeAgentOrchestrator.dryRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, log dispatch intents to the ledger but do not open chats."
+        },
+        "vscodeAgentOrchestrator.ghPollSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 15,
+          "description": "How often to poll GitHub for new PRs/commits."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build:ext": "esbuild src/extension.ts --bundle --platform=node --target=node20 --external:vscode --format=cjs --outfile=dist/extension.js",
+    "build:webview": "esbuild webview/src/main.tsx --bundle --platform=browser --target=es2022 --format=iife --outfile=dist/webview.js --loader:.css=css",
+    "build": "npm run build:ext && npm run build:webview",
+    "watch:ext": "npm run build:ext -- --watch=forever --sourcemap",
+    "watch:webview": "npm run build:webview -- --watch=forever --sourcemap",
+    "watch": "npm-run-all --parallel watch:ext watch:webview",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview/tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.94.0",
+    "esbuild": "^0.24.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "@xyflow/react": "^12.3.5",
+    "ajv": "^8.17.1",
+    "cron-parser": "^4.9.0",
+    "proper-lockfile": "^4.1.2",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ulid": "^2.3.0"
+  }
+}
