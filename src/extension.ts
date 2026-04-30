@@ -3,7 +3,8 @@ import { paths, ensureDirs, workspaceRoot, type OrchestrationPaths } from "./orc
 import { Ledger } from "./orchestration/ledger.js";
 import { WorkflowStore } from "./orchestration/workflow-store.js";
 import { MessageBus } from "./orchestration/message-bus.js";
-import { listAgents } from "./orchestration/agents.js";
+import { getAgent, listAgents } from "./orchestration/agents.js";
+import { resolveWorkflowNode } from "./orchestration/node-resolver.js";
 import { Dispatcher } from "./runtime/dispatcher.js";
 import { TriggerRegistry } from "./runtime/trigger-registry.js";
 import { registerChatParticipant } from "./runtime/chat-participant.js";
@@ -37,7 +38,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       paths: p,
       bus,
       ledger,
-      getWorkflow: () => store.get()
+      getWorkflow: () => store.get(),
+      getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null
     });
     output.appendLine("Chat participant @orchestrator registered.");
   } else {
@@ -63,15 +65,82 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     listAgents: async () => {
       const agents = await listAgents(root);
-      return agents.map((a) => ({ id: a.id, label: a.label, path: a.path }));
+      return agents.map((a) => ({
+        id: a.id,
+        label: a.label,
+        path: a.path,
+        source: a.source,
+        description: a.description,
+        defaultModel: a.defaultModel
+      }));
     },
+    listModels: async () => {
+      const models = await vscode.lm.selectChatModels();
+      return models.map((model) => ({
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family,
+        version: model.version,
+        maxInputTokens: model.maxInputTokens
+      }));
+    },
+    getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null,
     runNode: async (nodeId: string) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };
       const wf = store.get();
-      const node = wf?.nodes.find((n) => n.id === nodeId);
-      if (!node) return { ok: false, error: `No node with id ${nodeId}` };
+      const resolution = resolveWorkflowNode(wf, nodeId);
+      if (resolution.reason === "ambiguous") {
+        return { ok: false, error: `More than one node matches ${nodeId}. Use the node id.` };
+      }
+      const node = resolution.node;
+      if (!node) return { ok: false, error: `No node named ${nodeId}` };
       try {
         await dispatcher.fireNode(node, { reason: "manual" });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+    testTrigger: async (nodeId: string) => {
+      if (!store || !dispatcher || !bus || !ledger) return { ok: false, error: "Not initialized." };
+      const wf = store.get();
+      const resolution = resolveWorkflowNode(wf, nodeId);
+      if (resolution.reason === "ambiguous") {
+        return { ok: false, error: `More than one node matches ${nodeId}. Use the node id.` };
+      }
+      const node = resolution.node;
+      if (!node) return { ok: false, error: `No node named ${nodeId}` };
+      try {
+        if (node.trigger.type === "handoff") {
+          const payload = bus.buildPayload({
+            from: "validation",
+            to: node.id,
+            edgeId: null,
+            trigger: { type: "validation" },
+            payload: {
+              validation: true,
+              message: `Synthetic validation handoff for ${node.label}`,
+              nodeId: node.id
+            }
+          });
+          const { inboxPath, outboxPath } = await bus.deliver(payload);
+          await ledger.append({
+            type: "handoff.delivered",
+            eventId: payload.trace.rootId,
+            from: "validation",
+            to: node.id,
+            handoffId: payload.id,
+            inboxPath,
+            outboxPath,
+            detail: { validation: true }
+          });
+          return { ok: true };
+        }
+        await dispatcher.fireNode(node, {
+          reason: node.trigger.type,
+          triggerDetail: { validation: 1 }
+        });
         return { ok: true };
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };

@@ -6,7 +6,7 @@
 
 export const WORKFLOW_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
-  $id: "https://local/claude-orchestrator/workflow.schema.json",
+  $id: "https://local/vscode-agent-orchestrator/workflow.schema.json",
   type: "object",
   required: ["version", "id", "name", "settings", "nodes", "edges"],
   additionalProperties: true,
@@ -34,7 +34,7 @@ export const WORKFLOW_SCHEMA = {
         properties: {
           id: { type: "string", pattern: "^[a-zA-Z0-9_-]+$" },
           label: { type: "string", minLength: 1 },
-          agent: { type: "string", minLength: 1 },
+          agent: { type: "string" },
           trigger: {
             oneOf: [
               {
@@ -65,11 +65,49 @@ export const WORKFLOW_SCHEMA = {
                 type: "object",
                 required: ["type", "glob"],
                 properties: { type: { const: "fileChange" }, glob: { type: "string" } }
+              },
+              {
+                type: "object",
+                required: ["type"],
+                properties: {
+                  type: { const: "startup" },
+                  delaySeconds: { type: "integer", minimum: 0, maximum: 3600 }
+                }
+              },
+              {
+                type: "object",
+                required: ["type", "glob", "severity"],
+                properties: {
+                  type: { const: "diagnostics" },
+                  glob: { type: "string", minLength: 1 },
+                  severity: { enum: ["any", "error", "warning", "info", "hint"] },
+                  debounceMs: { type: "integer", minimum: 100, maximum: 60000 }
+                }
               }
             ]
           },
           context: { type: "string" },
-          model: { type: ["string", "null"] },
+          model: {
+            oneOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  vendor: { type: "string", minLength: 1 },
+                  family: { type: "string", minLength: 1 },
+                  id: { type: "string", minLength: 1 },
+                  version: { type: "string", minLength: 1 }
+                },
+                anyOf: [
+                  { required: ["vendor"] },
+                  { required: ["family"] },
+                  { required: ["id"] },
+                  { required: ["version"] }
+                ]
+              }
+            ]
+          },
           permissions: { enum: ["ask", "allow", "deny"] },
           position: {
             type: "object",

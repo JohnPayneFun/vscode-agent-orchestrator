@@ -18,9 +18,12 @@ import {
   type EdgeChange
 } from "@xyflow/react";
 import type { Workflow, WorkflowNode } from "../../shared/types.js";
+import type { EdgeActivity, NodeActivity } from "./App.js";
 
 interface Props {
   workflow: Workflow;
+  activityByNode: Record<string, NodeActivity>;
+  activityByEdge: Record<string, EdgeActivity>;
   selectedNodeId: string | null;
   onSelect: (id: string | null) => void;
   onMove: (id: string, x: number, y: number) => void;
@@ -28,13 +31,17 @@ interface Props {
   onRemoveEdge: (id: string) => void;
 }
 
-type FlowNode = Node<{ wfNode: WorkflowNode; selected: boolean }>;
+type FlowNode = Node<{ wfNode: WorkflowNode; selected: boolean; activity?: NodeActivity }>;
+
+const PERSONA_NODE_WIDTH = 260;
+const PERSONA_NODE_HEIGHT = 116;
 
 function PersonaNode({ data, selected }: NodeProps<FlowNode>): JSX.Element {
   const node = data.wfNode;
+  const activity = data.activity;
   const triggerLabel = describeTrigger(node);
   return (
-    <div className={`persona-node ${selected ? "selected" : ""} ${node.enabled ? "" : "disabled"}`}>
+    <div className={`persona-node ${selected ? "selected" : ""} ${node.enabled ? "" : "disabled"} ${activity ? `activity-${activity.status}` : ""}`}>
       <Handle
         type="target"
         position={Position.Left}
@@ -43,6 +50,7 @@ function PersonaNode({ data, selected }: NodeProps<FlowNode>): JSX.Element {
       />
       <span className="handle-label handle-label-in">IN</span>
       <div className="trigger-badge">On Trigger: {triggerLabel}</div>
+      {activity ? <div className={`runtime-badge ${activity.status}`} title={activity.detail}>{activity.label}</div> : null}
       <div className="label">{node.label}</div>
       <div className="agent">{node.agent}</div>
       <div className="context">{node.context || <em style={{ opacity: 0.5 }}>(no context)</em>}</div>
@@ -69,6 +77,10 @@ function describeTrigger(node: WorkflowNode): string {
       return "Manual";
     case "fileChange":
       return `File · ${node.trigger.glob}`;
+    case "startup":
+      return "Workspace start";
+    case "diagnostics":
+      return `Problems · ${node.trigger.severity}`;
   }
 }
 
@@ -84,6 +96,8 @@ export function GraphView(props: Props): JSX.Element {
 
 function GraphViewInner({
   workflow,
+  activityByNode,
+  activityByEdge,
   selectedNodeId,
   onSelect,
   onMove,
@@ -96,23 +110,31 @@ function GraphViewInner({
         id: n.id,
         type: "persona",
         position: n.position,
-        data: { wfNode: n, selected: n.id === selectedNodeId },
+        initialWidth: PERSONA_NODE_WIDTH,
+        initialHeight: PERSONA_NODE_HEIGHT,
+        data: { wfNode: n, selected: n.id === selectedNodeId, activity: activityByNode[n.id] },
         selected: n.id === selectedNodeId
       })),
-    [workflow.nodes, selectedNodeId]
+    [activityByNode, workflow.nodes, selectedNodeId]
   );
 
   const flowEdges: Edge[] = useMemo(
     () =>
       workflow.edges.map((e) => ({
+        className: activityByEdge[e.id] ? "edge-active" : undefined,
         id: e.id,
         source: e.from,
         target: e.to,
-        label: e.via ? `via ${e.via}` : undefined,
+        label: activityByEdge[e.id]?.label ?? (e.via ? `via ${e.via}` : undefined),
         animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#d18616" }
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 18,
+          height: 18,
+          color: activityByEdge[e.id] ? "#3fb950" : "#d18616"
+        }
       })),
-    [workflow.edges]
+    [activityByEdge, workflow.edges]
   );
 
   const handleNodesChange = useCallback(
@@ -164,8 +186,45 @@ function GraphViewInner({
       >
         <Background gap={16} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable />
+        <MiniMap
+          pannable
+          zoomable
+          className="workflow-minimap"
+          bgColor="var(--vscode-editorWidget-background)"
+          maskColor="rgba(0, 0, 0, 0.24)"
+          maskStrokeColor="var(--vscode-focusBorder)"
+          nodeBorderRadius={2}
+          nodeColor={(node) => miniMapNodeColor(node as FlowNode)}
+          nodeStrokeColor={(node) => miniMapNodeStrokeColor(node as FlowNode)}
+          nodeStrokeWidth={2}
+        />
       </ReactFlow>
     </div>
   );
+}
+
+function miniMapNodeColor(node: FlowNode): string {
+  if (node.selected) return "#d18616";
+  if (node.data.activity) return activityColor(node.data.activity.status);
+  return node.data.wfNode.enabled ? "#3794ff" : "#6e7681";
+}
+
+function miniMapNodeStrokeColor(node: FlowNode): string {
+  return node.selected ? "#f0f6fc" : "#c9d1d9";
+}
+
+function activityColor(status: NodeActivity["status"]): string {
+  switch (status) {
+    case "queued":
+    case "running":
+      return "#d18616";
+    case "completed":
+      return "#3fb950";
+    case "errored":
+    case "blocked":
+      return "#f85149";
+    case "idle":
+    default:
+      return "#3794ff";
+  }
 }

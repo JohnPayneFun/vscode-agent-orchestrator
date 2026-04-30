@@ -2435,7 +2435,7 @@
           var HostPortal = 4;
           var HostComponent = 5;
           var HostText = 6;
-          var Fragment3 = 7;
+          var Fragment4 = 7;
           var Mode = 8;
           var ContextConsumer = 9;
           var ContextProvider = 10;
@@ -3592,7 +3592,7 @@
                 return "DehydratedFragment";
               case ForwardRef:
                 return getWrappedName$1(type, type.render, "ForwardRef");
-              case Fragment3:
+              case Fragment4:
                 return "Fragment";
               case HostComponent:
                 return type;
@@ -12021,7 +12021,7 @@
               }
             }
             function updateFragment2(returnFiber, current2, fragment, lanes, key) {
-              if (current2 === null || current2.tag !== Fragment3) {
+              if (current2 === null || current2.tag !== Fragment4) {
                 var created = createFiberFromFragment(fragment, returnFiber.mode, lanes, key);
                 created.return = returnFiber;
                 return created;
@@ -12424,7 +12424,7 @@
                 if (child.key === key) {
                   var elementType = element.type;
                   if (elementType === REACT_FRAGMENT_TYPE) {
-                    if (child.tag === Fragment3) {
+                    if (child.tag === Fragment4) {
                       deleteRemainingChildren(returnFiber, child.sibling);
                       var existing = useFiber(child, element.props.children);
                       existing.return = returnFiber;
@@ -17900,7 +17900,7 @@
                 var _resolvedProps2 = workInProgress2.elementType === type ? _unresolvedProps2 : resolveDefaultProps(type, _unresolvedProps2);
                 return updateForwardRef(current2, workInProgress2, type, _resolvedProps2, renderLanes2);
               }
-              case Fragment3:
+              case Fragment4:
                 return updateFragment(current2, workInProgress2, renderLanes2);
               case Mode:
                 return updateMode(current2, workInProgress2, renderLanes2);
@@ -18172,7 +18172,7 @@
               case SimpleMemoComponent:
               case FunctionComponent:
               case ForwardRef:
-              case Fragment3:
+              case Fragment4:
               case Mode:
               case Profiler:
               case ContextConsumer:
@@ -22433,7 +22433,7 @@
             return fiber;
           }
           function createFiberFromFragment(elements, mode, lanes, key) {
-            var fiber = createFiber(Fragment3, elements, key, mode);
+            var fiber = createFiber(Fragment4, elements, key, mode);
             fiber.lanes = lanes;
             return fiber;
           }
@@ -33503,10 +33503,13 @@
 
   // webview/src/GraphView.tsx
   var import_jsx_runtime2 = __toESM(require_jsx_runtime());
+  var PERSONA_NODE_WIDTH = 260;
+  var PERSONA_NODE_HEIGHT = 116;
   function PersonaNode({ data, selected: selected2 }) {
     const node = data.wfNode;
+    const activity = data.activity;
     const triggerLabel = describeTrigger(node);
-    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: `persona-node ${selected2 ? "selected" : ""} ${node.enabled ? "" : "disabled"}`, children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: `persona-node ${selected2 ? "selected" : ""} ${node.enabled ? "" : "disabled"} ${activity ? `activity-${activity.status}` : ""}`, children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
         Handle,
         {
@@ -33521,6 +33524,7 @@
         "On Trigger: ",
         triggerLabel
       ] }),
+      activity ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: `runtime-badge ${activity.status}`, title: activity.detail, children: activity.label }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "label", children: node.label }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "agent", children: node.agent }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "context", children: node.context || /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("em", { style: { opacity: 0.5 }, children: "(no context)" }) }),
@@ -33548,6 +33552,10 @@
         return "Manual";
       case "fileChange":
         return `File \xB7 ${node.trigger.glob}`;
+      case "startup":
+        return "Workspace start";
+      case "diagnostics":
+        return `Problems \xB7 ${node.trigger.severity}`;
     }
   }
   var nodeTypes = { persona: PersonaNode };
@@ -33556,6 +33564,8 @@
   }
   function GraphViewInner({
     workflow,
+    activityByNode,
+    activityByEdge,
     selectedNodeId,
     onSelect,
     onMove,
@@ -33567,21 +33577,29 @@
         id: n.id,
         type: "persona",
         position: n.position,
-        data: { wfNode: n, selected: n.id === selectedNodeId },
+        initialWidth: PERSONA_NODE_WIDTH,
+        initialHeight: PERSONA_NODE_HEIGHT,
+        data: { wfNode: n, selected: n.id === selectedNodeId, activity: activityByNode[n.id] },
         selected: n.id === selectedNodeId
       })),
-      [workflow.nodes, selectedNodeId]
+      [activityByNode, workflow.nodes, selectedNodeId]
     );
     const flowEdges = (0, import_react3.useMemo)(
       () => workflow.edges.map((e) => ({
+        className: activityByEdge[e.id] ? "edge-active" : void 0,
         id: e.id,
         source: e.from,
         target: e.to,
-        label: e.via ? `via ${e.via}` : void 0,
+        label: activityByEdge[e.id]?.label ?? (e.via ? `via ${e.via}` : void 0),
         animated: true,
-        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: "#d18616" }
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 18,
+          height: 18,
+          color: activityByEdge[e.id] ? "#3fb950" : "#d18616"
+        }
       })),
-      [workflow.edges]
+      [activityByEdge, workflow.edges]
     );
     const handleNodesChange = (0, import_react3.useCallback)(
       (changes) => {
@@ -33628,10 +33646,47 @@
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Background, { gap: 16 }),
           /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Controls, { showInteractive: false }),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(MiniMap, { pannable: true, zoomable: true })
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+            MiniMap,
+            {
+              pannable: true,
+              zoomable: true,
+              className: "workflow-minimap",
+              bgColor: "var(--vscode-editorWidget-background)",
+              maskColor: "rgba(0, 0, 0, 0.24)",
+              maskStrokeColor: "var(--vscode-focusBorder)",
+              nodeBorderRadius: 2,
+              nodeColor: (node) => miniMapNodeColor(node),
+              nodeStrokeColor: (node) => miniMapNodeStrokeColor(node),
+              nodeStrokeWidth: 2
+            }
+          )
         ]
       }
     ) });
+  }
+  function miniMapNodeColor(node) {
+    if (node.selected) return "#d18616";
+    if (node.data.activity) return activityColor(node.data.activity.status);
+    return node.data.wfNode.enabled ? "#3794ff" : "#6e7681";
+  }
+  function miniMapNodeStrokeColor(node) {
+    return node.selected ? "#f0f6fc" : "#c9d1d9";
+  }
+  function activityColor(status) {
+    switch (status) {
+      case "queued":
+      case "running":
+        return "#d18616";
+      case "completed":
+        return "#3fb950";
+      case "errored":
+      case "blocked":
+        return "#f85149";
+      case "idle":
+      default:
+        return "#3794ff";
+    }
   }
 
   // webview/src/JsonView.tsx
@@ -33667,7 +33722,7 @@
 
   // webview/src/NodeForm.tsx
   var import_jsx_runtime4 = __toESM(require_jsx_runtime());
-  function NodeForm({ node, onChange, onDelete }) {
+  function NodeForm({ node, agents, models, onChange, onDelete }) {
     const set3 = (key, value) => {
       onChange({ ...node, [key]: value });
     };
@@ -33681,22 +33736,51 @@
       onChange({ ...node, model: next });
     };
     const m = node.model ?? null;
+    const selectedAgent = agents.find((agent) => agent.id === node.agent) ?? null;
+    const selectedModel = m ? models.find((model) => modelMatchesSelector(model, m)) ?? null : null;
+    const modelSelectValue = m ? selectedModel ? modelKey(selectedModel) : "__custom" : "";
     return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("h3", { children: [
-        "Node \xB7 ",
-        node.id
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h3", { children: "Node" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("p", { className: "field-note", children: [
+        "ID: ",
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("code", { children: node.id })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Label" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("input", { value: node.label, onChange: (e) => set3("label", e.target.value) }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Agent label (free-form, shown on the node)" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("input", { value: node.agent, onChange: (e) => set3("agent", e.target.value), placeholder: "e.g. security-reviewer" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Agent" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+        "select",
+        {
+          value: node.agent,
+          onChange: (e) => {
+            const nextAgent = agents.find((agent) => agent.id === e.target.value) ?? null;
+            onChange({
+              ...node,
+              agent: e.target.value,
+              label: nextAgent && (node.label.trim() === "" || node.label === "New Persona") ? nextAgent.label : node.label
+            });
+          },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "", children: "No custom agent" }),
+            agents.map((agent) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("option", { value: agent.id, title: agent.path, children: [
+              agent.label,
+              " (",
+              agent.source,
+              ")"
+            ] }, `${agent.source}:${agent.id}`))
+          ]
+        }
+      ),
+      selectedAgent?.description ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "field-note", children: selectedAgent.description }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "On Trigger" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("select", { value: node.trigger.type, onChange: (e) => setTriggerType(e.target.value), children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "manual", children: "Manual" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "handoff", children: "New Message (handoff received)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "timer", children: "Timer (cron)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "ghPr", children: "GitHub PR" }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "fileChange", children: "File change" })
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "fileChange", children: "File change" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "startup", children: "Workspace start" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "diagnostics", children: "Problems / diagnostics" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(TriggerFields, { trigger: node.trigger, onChange: setTrigger }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Context (system prompt \u2014 the persona's standing instructions)" }),
@@ -33710,45 +33794,37 @@
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h3", { style: { marginTop: 18 }, children: "Model (optional)" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 0 }, children: [
-        "Leave blank to use whatever the user picks in the native chat model dropdown. Fill in to pre-select a specific model via",
-        " ",
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("code", { children: "vscode.lm.selectChatModels" }),
-        "."
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Vendor" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: m?.vendor ?? "",
-              placeholder: "copilot",
-              onChange: (e) => setModel(updateModel(m, { vendor: e.target.value || void 0 }))
-            }
-          )
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Family" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: m?.family ?? "",
-              placeholder: "gpt-4o",
-              onChange: (e) => setModel(updateModel(m, { family: e.target.value || void 0 }))
-            }
-          )
-        ] })
-      ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Specific model id (optional)" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-        "input",
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 0 }, children: "Leave blank to use whatever the user picks in the native chat model dropdown." }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Model" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+        "select",
         {
-          value: m?.id ?? "",
-          placeholder: "(leave blank to match by vendor/family)",
-          onChange: (e) => setModel(updateModel(m, { id: e.target.value || void 0 }))
+          value: modelSelectValue,
+          onChange: (e) => {
+            const value = e.target.value;
+            if (!value) {
+              setModel(null);
+              return;
+            }
+            const nextModel = models.find((model) => modelKey(model) === value);
+            setModel(nextModel ? selectorFromModel(nextModel) : m);
+          },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "", children: "Use chat picker default" }),
+            m && !selectedModel ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("option", { value: "__custom", children: [
+              "Custom: ",
+              formatModelSelector(m)
+            ] }) : null,
+            models.map((model) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("option", { value: modelKey(model), children: [
+              model.name,
+              " (",
+              model.vendor,
+              ")"
+            ] }, modelKey(model)))
+          ]
         }
       ),
+      m ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "field-note", children: formatModelSelector(m) }) : null,
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
           "input",
@@ -33764,12 +33840,27 @@
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { className: "danger", onClick: onDelete, children: "Delete node" }) })
     ] });
   }
-  function updateModel(prev, patch) {
-    const next = { ...prev ?? {}, ...patch };
-    for (const k of Object.keys(next)) {
-      if (next[k] === void 0 || next[k] === "") delete next[k];
-    }
-    return Object.keys(next).length === 0 ? null : next;
+  function selectorFromModel(model) {
+    return {
+      vendor: model.vendor,
+      family: model.family,
+      id: model.id,
+      version: model.version
+    };
+  }
+  function modelMatchesSelector(model, selector) {
+    return (!selector.vendor || selector.vendor === model.vendor) && (!selector.family || selector.family === model.family) && (!selector.id || selector.id === model.id) && (!selector.version || selector.version === model.version);
+  }
+  function modelKey(model) {
+    return [model.vendor, model.family, model.id, model.version].join("||");
+  }
+  function formatModelSelector(selector) {
+    return [
+      selector.vendor ? `vendor=${selector.vendor}` : "",
+      selector.family ? `family=${selector.family}` : "",
+      selector.id ? `id=${selector.id}` : "",
+      selector.version ? `version=${selector.version}` : ""
+    ].filter(Boolean).join(", ");
   }
   function TriggerFields({
     trigger,
@@ -33836,6 +33927,58 @@
             }
           )
         ] });
+      case "startup":
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Delay after activation (seconds)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 0,
+              max: 3600,
+              value: trigger.delaySeconds ?? 3,
+              onChange: (e) => onChange({ ...trigger, delaySeconds: Number(e.target.value) || 0 })
+            }
+          )
+        ] });
+      case "diagnostics":
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "File glob" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              value: trigger.glob,
+              placeholder: "src/**/*",
+              onChange: (e) => onChange({ ...trigger, glob: e.target.value })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Severity" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+            "select",
+            {
+              value: trigger.severity,
+              onChange: (e) => onChange({ ...trigger, severity: e.target.value }),
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "any", children: "Any" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "error", children: "Errors" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "warning", children: "Warnings" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "info", children: "Info" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hint", children: "Hints" })
+              ]
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Debounce (milliseconds)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 100,
+              max: 6e4,
+              value: trigger.debounceMs ?? 1e3,
+              onChange: (e) => onChange({ ...trigger, debounceMs: Number(e.target.value) || 1e3 })
+            }
+          )
+        ] });
       case "handoff":
       case "manual":
       default:
@@ -33854,6 +33997,10 @@
         return { type: "manual" };
       case "fileChange":
         return { type: "fileChange", glob: "src/**/*.ts" };
+      case "startup":
+        return { type: "startup", delaySeconds: 3 };
+      case "diagnostics":
+        return { type: "diagnostics", glob: "src/**/*", severity: "error", debounceMs: 1e3 };
     }
   }
 
@@ -33912,10 +34059,16 @@
     const [view, setView] = (0, import_react7.useState)("graph");
     const [selectedNodeId, setSelectedNodeId] = (0, import_react7.useState)(null);
     const [agents, setAgents] = (0, import_react7.useState)([]);
+    const [models, setModels] = (0, import_react7.useState)([]);
     const [ledger, setLedger] = (0, import_react7.useState)([]);
     const [status, setStatus] = (0, import_react7.useState)("");
     const [dirty, setDirty] = (0, import_react7.useState)(false);
     const initRef = (0, import_react7.useRef)(false);
+    const workflowRef = (0, import_react7.useRef)(workflow);
+    const pendingSaveRef = (0, import_react7.useRef)(null);
+    (0, import_react7.useEffect)(() => {
+      workflowRef.current = workflow;
+    }, [workflow]);
     (0, import_react7.useEffect)(() => {
       const off = onMessage((msg) => {
         switch (msg.type) {
@@ -33925,8 +34078,15 @@
             break;
           case "workflow.saved":
             if (msg.ok) {
-              setStatus("Saved.");
-              setDirty(false);
+              const currentSnapshot = JSON.stringify(workflowRef.current);
+              if (!pendingSaveRef.current || pendingSaveRef.current === currentSnapshot) {
+                setDirty(false);
+                setStatus("Saved.");
+              } else {
+                setDirty(true);
+                setStatus("Autosaving...");
+              }
+              pendingSaveRef.current = null;
               window.setTimeout(() => setStatus(""), 1500);
             } else {
               setStatus(`Save failed: ${msg.error ?? "unknown error"}`);
@@ -33935,12 +34095,19 @@
           case "agents.list":
             setAgents(msg.agents);
             break;
+          case "models.list":
+            setModels(msg.models);
+            break;
           case "ledger.append":
             setLedger((prev) => [...prev.slice(-499), msg.entry]);
             break;
           case "node.runResult":
             setStatus(msg.ok ? `Ran node ${msg.nodeId}.` : `Run failed: ${msg.error}`);
             window.setTimeout(() => setStatus(""), 2e3);
+            break;
+          case "trigger.testResult":
+            setStatus(msg.ok ? `Validation trigger sent to ${msg.nodeId}.` : `Validation failed: ${msg.error}`);
+            window.setTimeout(() => setStatus(""), 2500);
             break;
           case "toast":
             setStatus(msg.message);
@@ -33954,10 +34121,23 @@
       }
       return off;
     }, []);
+    (0, import_react7.useEffect)(() => {
+      if (!dirty) return;
+      const timer2 = window.setTimeout(() => {
+        const snapshot = JSON.stringify(workflowRef.current);
+        pendingSaveRef.current = snapshot;
+        setStatus("Autosaving...");
+        send({ type: "workflow.save", workflow: workflowRef.current });
+      }, 700);
+      return () => window.clearTimeout(timer2);
+    }, [dirty, workflow]);
     const selectedNode = (0, import_react7.useMemo)(
       () => selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null,
       [selectedNodeId, workflow]
     );
+    const activityByNode = (0, import_react7.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
+    const activityByEdge = (0, import_react7.useMemo)(() => buildEdgeActivity(workflow, ledger), [workflow, ledger]);
+    const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
     const updateNode = (next) => {
       setWorkflow((wf) => ({
         ...wf,
@@ -33966,11 +34146,11 @@
       setDirty(true);
     };
     const addNode = () => {
-      const id2 = `node_${Math.random().toString(36).slice(2, 8)}`;
+      const id2 = nextNodeId(workflow.nodes);
       const newNode = {
         id: id2,
         label: "New Persona",
-        agent: "agent",
+        agent: "",
         trigger: { type: "manual" },
         context: "",
         position: { x: 100 + workflow.nodes.length * 60, y: 100 + workflow.nodes.length * 40 },
@@ -34009,11 +34189,18 @@
       setDirty(true);
     };
     const save = () => {
+      pendingSaveRef.current = JSON.stringify(workflow);
       send({ type: "workflow.save", workflow });
     };
     const runSelected = () => {
       if (!selectedNode) return;
-      send({ type: "node.run", nodeId: selectedNode.id });
+      setStatus("Saving and running...");
+      send({ type: "node.run", nodeId: selectedNode.label || selectedNode.id, workflow });
+    };
+    const validateSelected = () => {
+      if (!selectedNode) return;
+      setStatus("Saving and validating trigger...");
+      send({ type: "trigger.test", nodeId: selectedNode.label || selectedNode.id, workflow });
     };
     const replaceWorkflow = (next) => {
       setWorkflow(next);
@@ -34021,7 +34208,7 @@
     };
     return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "app", children: [
       /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "toolbar", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { children: "Claude Orchestrator" }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("strong", { children: "Agent Orchestrator" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { style: { opacity: 0.6 }, children: [
           "\xB7 ",
           workflow.name,
@@ -34033,6 +34220,7 @@
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { className: "secondary", onClick: () => setView(view === "graph" ? "json" : "graph"), children: view === "graph" ? "View as JSON" : "View as Graph" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { onClick: addNode, children: "+ Node" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { onClick: runSelected, disabled: !selectedNode, children: "\u25B6 Run selected" }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { className: "secondary", onClick: validateSelected, disabled: !selectedNode, children: "Validate trigger" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { onClick: save, disabled: !dirty, children: dirty ? "Save *" : "Saved" }),
         status ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { marginLeft: 8, opacity: 0.8 }, children: status }) : null
       ] }),
@@ -34040,6 +34228,8 @@
         GraphView2,
         {
           workflow,
+          activityByNode,
+          activityByEdge,
           selectedNodeId,
           onSelect: setSelectedNodeId,
           onMove: moveNode,
@@ -34047,15 +34237,19 @@
           onRemoveEdge: removeEdge
         }
       ) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(JsonView, { workflow, onChange: replaceWorkflow }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "side-panel", children: selectedNode ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
-        NodeForm,
-        {
-          node: selectedNode,
-          agents,
-          onChange: updateNode,
-          onDelete: () => deleteNode(selectedNode.id)
-        }
-      ) : /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "side-panel", children: selectedNode ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+          NodeForm,
+          {
+            node: selectedNode,
+            agents,
+            models,
+            onChange: updateNode,
+            onDelete: () => deleteNode(selectedNode.id)
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Workflow" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("label", { children: "Name" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
@@ -34106,6 +34300,165 @@
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
     ] });
+  }
+  function NodeActivityPanel({ activity }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Runtime" }),
+      activity ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: `activity-status ${activity.status}`, children: activity.label }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "field-note", children: activity.detail }),
+        activity.ts ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Last event: ",
+          shortTime2(activity.ts)
+        ] }) : null,
+        activity.eventId ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Event: ",
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("code", { children: activity.eventId })
+        ] }) : null
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "field-note", children: "No runtime activity yet." })
+    ] });
+  }
+  function buildNodeActivity(workflow, entries) {
+    const activity = {};
+    const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+    for (const entry of entries) {
+      const next = activityFromEntry(entry, nodeIds);
+      if (!next) continue;
+      activity[next.nodeId] = next.activity;
+    }
+    return activity;
+  }
+  function activityFromEntry(entry, nodeIds) {
+    const node = typeof entry.node === "string" ? entry.node : void 0;
+    const to = typeof entry.to === "string" ? entry.to : void 0;
+    const from = typeof entry.from === "string" ? entry.from : void 0;
+    const eventId = typeof entry.eventId === "string" ? entry.eventId : void 0;
+    switch (entry.type) {
+      case "handoff.delivered":
+        if (!to || !nodeIds.has(to)) return null;
+        return {
+          nodeId: to,
+          activity: {
+            status: "queued",
+            label: entry.detail && entry.detail.validation ? "Validation queued" : "Inbox received",
+            detail: from ? `Handoff delivered from ${from}.` : "Handoff delivered to inbox.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "handoff.consumed":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "running",
+            label: "Handoff consumed",
+            detail: from ? `Drained handoff from ${from}.` : "Drained an inbox handoff.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "trigger.fired":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "running",
+            label: "Running",
+            detail: triggerDetail(entry),
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "session.spawned":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "completed",
+            label: "Completed",
+            detail: sessionDetail(entry),
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "session.errored":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "errored",
+            label: "Errored",
+            detail: typeof entry.error === "string" ? entry.error : "Session errored.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "guardrail.tripped":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "blocked",
+            label: "Blocked",
+            detail: typeof entry.rule === "string" ? `Guardrail: ${entry.rule}.` : "Guardrail tripped.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "handoff.emitted":
+        if (!from || !nodeIds.has(from)) return null;
+        return {
+          nodeId: from,
+          activity: {
+            status: "completed",
+            label: "Handoff sent",
+            detail: to ? `Sent handoff to ${to}.` : "Sent a handoff.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      default:
+        return null;
+    }
+  }
+  function buildEdgeActivity(workflow, entries) {
+    const activity = {};
+    for (const entry of entries) {
+      if (entry.type !== "handoff.emitted") continue;
+      const from = typeof entry.from === "string" ? entry.from : void 0;
+      const to = typeof entry.to === "string" ? entry.to : void 0;
+      if (!from || !to) continue;
+      const edge = workflow.edges.find((candidate) => candidate.from === from && candidate.to === to);
+      if (!edge) continue;
+      activity[edge.id] = { label: `Handoff ${shortTime2(entry.ts)}`, ts: entry.ts };
+    }
+    return activity;
+  }
+  function triggerDetail(entry) {
+    const detail = entry.detail ?? {};
+    const drained = typeof detail.drainedHandoffs === "number" ? detail.drainedHandoffs : 0;
+    const trigger = typeof entry.trigger === "string" ? entry.trigger : "manual";
+    return drained > 0 ? `${trigger} trigger, drained ${drained} handoff(s).` : `${trigger} trigger fired.`;
+  }
+  function sessionDetail(entry) {
+    const drained = typeof entry.drainedHandoffs === "number" ? entry.drainedHandoffs : 0;
+    const responseLength = typeof entry.responseLength === "number" ? entry.responseLength : 0;
+    const handoffText = drained > 0 ? ` Drained ${drained} handoff(s).` : "";
+    return responseLength > 0 ? `Response: ${responseLength} chars.${handoffText}` : `Session completed.${handoffText}`;
+  }
+  function shortTime2(ts) {
+    const date = new Date(ts);
+    if (Number.isNaN(date.getTime())) return ts;
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }
+  function nextNodeId(nodes) {
+    const used = new Set(nodes.map((node) => node.id));
+    for (let index2 = nodes.length + 1; index2 < nodes.length + 1e3; index2++) {
+      const id2 = `node_${index2}`;
+      if (!used.has(id2)) return id2;
+    }
+    return `node_${Date.now().toString(36)}`;
   }
 
   // webview/src/main.tsx

@@ -46,7 +46,7 @@ export class GhPrTrigger implements Trigger {
   }
 
   start(): void {
-    const cfg = vscode.workspace.getConfiguration("claudeOrchestrator");
+    const cfg = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
     const seconds = Math.max(15, cfg.get<number>("ghPollSeconds", 60));
     void this.poll();
     this.interval = setInterval(() => void this.poll(), seconds * 1000);
@@ -91,7 +91,17 @@ export class GhPrTrigger implements Trigger {
 
     const state = await loadState(this.p);
     const perNode = state.perNode[this.node.id] ?? { seen: {} };
-    const branchFilter = this.cfg.branchFilter ? new RegExp(this.cfg.branchFilter) : null;
+    let branchFilter: RegExp | null = null;
+    if (this.cfg.branchFilter) {
+      try {
+        branchFilter = new RegExp(this.cfg.branchFilter);
+      } catch (err) {
+        this.deps.log(
+          `Invalid branchFilter for ${this.cfg.repo} on node ${this.node.id}: ${err instanceof Error ? err.message : err}`,
+          "warn"
+        );
+      }
+    }
 
     for (const pr of prs) {
       if (branchFilter && !branchFilter.test(pr.headRefName)) continue;

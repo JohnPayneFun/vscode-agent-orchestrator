@@ -56,54 +56,54 @@ var require_polyfills = __commonJS({
     }
     var chdir;
     module2.exports = patch;
-    function patch(fs8) {
+    function patch(fs10) {
       if (constants.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-        patchLchmod(fs8);
+        patchLchmod(fs10);
       }
-      if (!fs8.lutimes) {
-        patchLutimes(fs8);
+      if (!fs10.lutimes) {
+        patchLutimes(fs10);
       }
-      fs8.chown = chownFix(fs8.chown);
-      fs8.fchown = chownFix(fs8.fchown);
-      fs8.lchown = chownFix(fs8.lchown);
-      fs8.chmod = chmodFix(fs8.chmod);
-      fs8.fchmod = chmodFix(fs8.fchmod);
-      fs8.lchmod = chmodFix(fs8.lchmod);
-      fs8.chownSync = chownFixSync(fs8.chownSync);
-      fs8.fchownSync = chownFixSync(fs8.fchownSync);
-      fs8.lchownSync = chownFixSync(fs8.lchownSync);
-      fs8.chmodSync = chmodFixSync(fs8.chmodSync);
-      fs8.fchmodSync = chmodFixSync(fs8.fchmodSync);
-      fs8.lchmodSync = chmodFixSync(fs8.lchmodSync);
-      fs8.stat = statFix(fs8.stat);
-      fs8.fstat = statFix(fs8.fstat);
-      fs8.lstat = statFix(fs8.lstat);
-      fs8.statSync = statFixSync(fs8.statSync);
-      fs8.fstatSync = statFixSync(fs8.fstatSync);
-      fs8.lstatSync = statFixSync(fs8.lstatSync);
-      if (fs8.chmod && !fs8.lchmod) {
-        fs8.lchmod = function(path9, mode, cb) {
+      fs10.chown = chownFix(fs10.chown);
+      fs10.fchown = chownFix(fs10.fchown);
+      fs10.lchown = chownFix(fs10.lchown);
+      fs10.chmod = chmodFix(fs10.chmod);
+      fs10.fchmod = chmodFix(fs10.fchmod);
+      fs10.lchmod = chmodFix(fs10.lchmod);
+      fs10.chownSync = chownFixSync(fs10.chownSync);
+      fs10.fchownSync = chownFixSync(fs10.fchownSync);
+      fs10.lchownSync = chownFixSync(fs10.lchownSync);
+      fs10.chmodSync = chmodFixSync(fs10.chmodSync);
+      fs10.fchmodSync = chmodFixSync(fs10.fchmodSync);
+      fs10.lchmodSync = chmodFixSync(fs10.lchmodSync);
+      fs10.stat = statFix(fs10.stat);
+      fs10.fstat = statFix(fs10.fstat);
+      fs10.lstat = statFix(fs10.lstat);
+      fs10.statSync = statFixSync(fs10.statSync);
+      fs10.fstatSync = statFixSync(fs10.fstatSync);
+      fs10.lstatSync = statFixSync(fs10.lstatSync);
+      if (fs10.chmod && !fs10.lchmod) {
+        fs10.lchmod = function(path12, mode, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs8.lchmodSync = function() {
+        fs10.lchmodSync = function() {
         };
       }
-      if (fs8.chown && !fs8.lchown) {
-        fs8.lchown = function(path9, uid, gid, cb) {
+      if (fs10.chown && !fs10.lchown) {
+        fs10.lchown = function(path12, uid, gid, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs8.lchownSync = function() {
+        fs10.lchownSync = function() {
         };
       }
       if (platform === "win32") {
-        fs8.rename = typeof fs8.rename !== "function" ? fs8.rename : function(fs$rename) {
+        fs10.rename = typeof fs10.rename !== "function" ? fs10.rename : function(fs$rename) {
           function rename(from, to, cb) {
             var start = Date.now();
             var backoff = 0;
             fs$rename(from, to, function CB(er) {
               if (er && (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") && Date.now() - start < 6e4) {
                 setTimeout(function() {
-                  fs8.stat(to, function(stater, st) {
+                  fs10.stat(to, function(stater, st) {
                     if (stater && stater.code === "ENOENT")
                       fs$rename(from, to, CB);
                     else
@@ -119,9 +119,9 @@ var require_polyfills = __commonJS({
           }
           if (Object.setPrototypeOf) Object.setPrototypeOf(rename, fs$rename);
           return rename;
-        }(fs8.rename);
+        }(fs10.rename);
       }
-      fs8.read = typeof fs8.read !== "function" ? fs8.read : function(fs$read) {
+      fs10.read = typeof fs10.read !== "function" ? fs10.read : function(fs$read) {
         function read(fd, buffer, offset, length, position, callback_) {
           var callback;
           if (callback_ && typeof callback_ === "function") {
@@ -129,22 +129,22 @@ var require_polyfills = __commonJS({
             callback = function(er, _, __) {
               if (er && er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
-                return fs$read.call(fs8, fd, buffer, offset, length, position, callback);
+                return fs$read.call(fs10, fd, buffer, offset, length, position, callback);
               }
               callback_.apply(this, arguments);
             };
           }
-          return fs$read.call(fs8, fd, buffer, offset, length, position, callback);
+          return fs$read.call(fs10, fd, buffer, offset, length, position, callback);
         }
         if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
         return read;
-      }(fs8.read);
-      fs8.readSync = typeof fs8.readSync !== "function" ? fs8.readSync : /* @__PURE__ */ function(fs$readSync) {
+      }(fs10.read);
+      fs10.readSync = typeof fs10.readSync !== "function" ? fs10.readSync : /* @__PURE__ */ function(fs$readSync) {
         return function(fd, buffer, offset, length, position) {
           var eagCounter = 0;
           while (true) {
             try {
-              return fs$readSync.call(fs8, fd, buffer, offset, length, position);
+              return fs$readSync.call(fs10, fd, buffer, offset, length, position);
             } catch (er) {
               if (er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
@@ -154,11 +154,11 @@ var require_polyfills = __commonJS({
             }
           }
         };
-      }(fs8.readSync);
-      function patchLchmod(fs9) {
-        fs9.lchmod = function(path9, mode, callback) {
-          fs9.open(
-            path9,
+      }(fs10.readSync);
+      function patchLchmod(fs11) {
+        fs11.lchmod = function(path12, mode, callback) {
+          fs11.open(
+            path12,
             constants.O_WRONLY | constants.O_SYMLINK,
             mode,
             function(err, fd) {
@@ -166,80 +166,80 @@ var require_polyfills = __commonJS({
                 if (callback) callback(err);
                 return;
               }
-              fs9.fchmod(fd, mode, function(err2) {
-                fs9.close(fd, function(err22) {
+              fs11.fchmod(fd, mode, function(err2) {
+                fs11.close(fd, function(err22) {
                   if (callback) callback(err2 || err22);
                 });
               });
             }
           );
         };
-        fs9.lchmodSync = function(path9, mode) {
-          var fd = fs9.openSync(path9, constants.O_WRONLY | constants.O_SYMLINK, mode);
+        fs11.lchmodSync = function(path12, mode) {
+          var fd = fs11.openSync(path12, constants.O_WRONLY | constants.O_SYMLINK, mode);
           var threw = true;
           var ret;
           try {
-            ret = fs9.fchmodSync(fd, mode);
+            ret = fs11.fchmodSync(fd, mode);
             threw = false;
           } finally {
             if (threw) {
               try {
-                fs9.closeSync(fd);
+                fs11.closeSync(fd);
               } catch (er) {
               }
             } else {
-              fs9.closeSync(fd);
+              fs11.closeSync(fd);
             }
           }
           return ret;
         };
       }
-      function patchLutimes(fs9) {
-        if (constants.hasOwnProperty("O_SYMLINK") && fs9.futimes) {
-          fs9.lutimes = function(path9, at, mt, cb) {
-            fs9.open(path9, constants.O_SYMLINK, function(er, fd) {
+      function patchLutimes(fs11) {
+        if (constants.hasOwnProperty("O_SYMLINK") && fs11.futimes) {
+          fs11.lutimes = function(path12, at, mt, cb) {
+            fs11.open(path12, constants.O_SYMLINK, function(er, fd) {
               if (er) {
                 if (cb) cb(er);
                 return;
               }
-              fs9.futimes(fd, at, mt, function(er2) {
-                fs9.close(fd, function(er22) {
+              fs11.futimes(fd, at, mt, function(er2) {
+                fs11.close(fd, function(er22) {
                   if (cb) cb(er2 || er22);
                 });
               });
             });
           };
-          fs9.lutimesSync = function(path9, at, mt) {
-            var fd = fs9.openSync(path9, constants.O_SYMLINK);
+          fs11.lutimesSync = function(path12, at, mt) {
+            var fd = fs11.openSync(path12, constants.O_SYMLINK);
             var ret;
             var threw = true;
             try {
-              ret = fs9.futimesSync(fd, at, mt);
+              ret = fs11.futimesSync(fd, at, mt);
               threw = false;
             } finally {
               if (threw) {
                 try {
-                  fs9.closeSync(fd);
+                  fs11.closeSync(fd);
                 } catch (er) {
                 }
               } else {
-                fs9.closeSync(fd);
+                fs11.closeSync(fd);
               }
             }
             return ret;
           };
-        } else if (fs9.futimes) {
-          fs9.lutimes = function(_a, _b, _c, cb) {
+        } else if (fs11.futimes) {
+          fs11.lutimes = function(_a, _b, _c, cb) {
             if (cb) process.nextTick(cb);
           };
-          fs9.lutimesSync = function() {
+          fs11.lutimesSync = function() {
           };
         }
       }
       function chmodFix(orig) {
         if (!orig) return orig;
         return function(target, mode, cb) {
-          return orig.call(fs8, target, mode, function(er) {
+          return orig.call(fs10, target, mode, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -249,7 +249,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, mode) {
           try {
-            return orig.call(fs8, target, mode);
+            return orig.call(fs10, target, mode);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -258,7 +258,7 @@ var require_polyfills = __commonJS({
       function chownFix(orig) {
         if (!orig) return orig;
         return function(target, uid, gid, cb) {
-          return orig.call(fs8, target, uid, gid, function(er) {
+          return orig.call(fs10, target, uid, gid, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -268,7 +268,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, uid, gid) {
           try {
-            return orig.call(fs8, target, uid, gid);
+            return orig.call(fs10, target, uid, gid);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -288,13 +288,13 @@ var require_polyfills = __commonJS({
             }
             if (cb) cb.apply(this, arguments);
           }
-          return options ? orig.call(fs8, target, options, callback) : orig.call(fs8, target, callback);
+          return options ? orig.call(fs10, target, options, callback) : orig.call(fs10, target, callback);
         };
       }
       function statFixSync(orig) {
         if (!orig) return orig;
         return function(target, options) {
-          var stats = options ? orig.call(fs8, target, options) : orig.call(fs8, target);
+          var stats = options ? orig.call(fs10, target, options) : orig.call(fs10, target);
           if (stats) {
             if (stats.uid < 0) stats.uid += 4294967296;
             if (stats.gid < 0) stats.gid += 4294967296;
@@ -323,16 +323,16 @@ var require_legacy_streams = __commonJS({
   "node_modules/graceful-fs/legacy-streams.js"(exports2, module2) {
     var Stream = require("stream").Stream;
     module2.exports = legacy;
-    function legacy(fs8) {
+    function legacy(fs10) {
       return {
         ReadStream,
         WriteStream
       };
-      function ReadStream(path9, options) {
-        if (!(this instanceof ReadStream)) return new ReadStream(path9, options);
+      function ReadStream(path12, options) {
+        if (!(this instanceof ReadStream)) return new ReadStream(path12, options);
         Stream.call(this);
         var self2 = this;
-        this.path = path9;
+        this.path = path12;
         this.fd = null;
         this.readable = true;
         this.paused = false;
@@ -366,7 +366,7 @@ var require_legacy_streams = __commonJS({
           });
           return;
         }
-        fs8.open(this.path, this.flags, this.mode, function(err, fd) {
+        fs10.open(this.path, this.flags, this.mode, function(err, fd) {
           if (err) {
             self2.emit("error", err);
             self2.readable = false;
@@ -377,10 +377,10 @@ var require_legacy_streams = __commonJS({
           self2._read();
         });
       }
-      function WriteStream(path9, options) {
-        if (!(this instanceof WriteStream)) return new WriteStream(path9, options);
+      function WriteStream(path12, options) {
+        if (!(this instanceof WriteStream)) return new WriteStream(path12, options);
         Stream.call(this);
-        this.path = path9;
+        this.path = path12;
         this.fd = null;
         this.writable = true;
         this.flags = "w";
@@ -405,7 +405,7 @@ var require_legacy_streams = __commonJS({
         this.busy = false;
         this._queue = [];
         if (this.fd === null) {
-          this._open = fs8.open;
+          this._open = fs10.open;
           this._queue.push([this._open, this.path, this.flags, this.mode, void 0]);
           this.flush();
         }
@@ -440,7 +440,7 @@ var require_clone = __commonJS({
 // node_modules/graceful-fs/graceful-fs.js
 var require_graceful_fs = __commonJS({
   "node_modules/graceful-fs/graceful-fs.js"(exports2, module2) {
-    var fs8 = require("fs");
+    var fs10 = require("fs");
     var polyfills = require_polyfills();
     var legacy = require_legacy_streams();
     var clone = require_clone();
@@ -472,12 +472,12 @@ var require_graceful_fs = __commonJS({
         m = "GFS4: " + m.split(/\n/).join("\nGFS4: ");
         console.error(m);
       };
-    if (!fs8[gracefulQueue]) {
+    if (!fs10[gracefulQueue]) {
       queue = global[gracefulQueue] || [];
-      publishQueue(fs8, queue);
-      fs8.close = function(fs$close) {
+      publishQueue(fs10, queue);
+      fs10.close = function(fs$close) {
         function close(fd, cb) {
-          return fs$close.call(fs8, fd, function(err) {
+          return fs$close.call(fs10, fd, function(err) {
             if (!err) {
               resetQueue();
             }
@@ -489,48 +489,48 @@ var require_graceful_fs = __commonJS({
           value: fs$close
         });
         return close;
-      }(fs8.close);
-      fs8.closeSync = function(fs$closeSync) {
+      }(fs10.close);
+      fs10.closeSync = function(fs$closeSync) {
         function closeSync(fd) {
-          fs$closeSync.apply(fs8, arguments);
+          fs$closeSync.apply(fs10, arguments);
           resetQueue();
         }
         Object.defineProperty(closeSync, previousSymbol, {
           value: fs$closeSync
         });
         return closeSync;
-      }(fs8.closeSync);
+      }(fs10.closeSync);
       if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) {
         process.on("exit", function() {
-          debug(fs8[gracefulQueue]);
-          require("assert").equal(fs8[gracefulQueue].length, 0);
+          debug(fs10[gracefulQueue]);
+          require("assert").equal(fs10[gracefulQueue].length, 0);
         });
       }
     }
     var queue;
     if (!global[gracefulQueue]) {
-      publishQueue(global, fs8[gracefulQueue]);
+      publishQueue(global, fs10[gracefulQueue]);
     }
-    module2.exports = patch(clone(fs8));
-    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs8.__patched) {
-      module2.exports = patch(fs8);
-      fs8.__patched = true;
+    module2.exports = patch(clone(fs10));
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs10.__patched) {
+      module2.exports = patch(fs10);
+      fs10.__patched = true;
     }
-    function patch(fs9) {
-      polyfills(fs9);
-      fs9.gracefulify = patch;
-      fs9.createReadStream = createReadStream;
-      fs9.createWriteStream = createWriteStream;
-      var fs$readFile = fs9.readFile;
-      fs9.readFile = readFile;
-      function readFile(path9, options, cb) {
+    function patch(fs11) {
+      polyfills(fs11);
+      fs11.gracefulify = patch;
+      fs11.createReadStream = createReadStream;
+      fs11.createWriteStream = createWriteStream;
+      var fs$readFile = fs11.readFile;
+      fs11.readFile = readFile;
+      function readFile(path12, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$readFile(path9, options, cb);
-        function go$readFile(path10, options2, cb2, startTime) {
-          return fs$readFile(path10, options2, function(err) {
+        return go$readFile(path12, options, cb);
+        function go$readFile(path13, options2, cb2, startTime) {
+          return fs$readFile(path13, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$readFile, [path10, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$readFile, [path13, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -538,16 +538,16 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$writeFile = fs9.writeFile;
-      fs9.writeFile = writeFile;
-      function writeFile(path9, data, options, cb) {
+      var fs$writeFile = fs11.writeFile;
+      fs11.writeFile = writeFile;
+      function writeFile(path12, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$writeFile(path9, data, options, cb);
-        function go$writeFile(path10, data2, options2, cb2, startTime) {
-          return fs$writeFile(path10, data2, options2, function(err) {
+        return go$writeFile(path12, data, options, cb);
+        function go$writeFile(path13, data2, options2, cb2, startTime) {
+          return fs$writeFile(path13, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$writeFile, [path10, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$writeFile, [path13, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -555,17 +555,17 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$appendFile = fs9.appendFile;
+      var fs$appendFile = fs11.appendFile;
       if (fs$appendFile)
-        fs9.appendFile = appendFile;
-      function appendFile(path9, data, options, cb) {
+        fs11.appendFile = appendFile;
+      function appendFile(path12, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$appendFile(path9, data, options, cb);
-        function go$appendFile(path10, data2, options2, cb2, startTime) {
-          return fs$appendFile(path10, data2, options2, function(err) {
+        return go$appendFile(path12, data, options, cb);
+        function go$appendFile(path13, data2, options2, cb2, startTime) {
+          return fs$appendFile(path13, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$appendFile, [path10, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$appendFile, [path13, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -573,9 +573,9 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$copyFile = fs9.copyFile;
+      var fs$copyFile = fs11.copyFile;
       if (fs$copyFile)
-        fs9.copyFile = copyFile;
+        fs11.copyFile = copyFile;
       function copyFile(src, dest, flags, cb) {
         if (typeof flags === "function") {
           cb = flags;
@@ -593,34 +593,34 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$readdir = fs9.readdir;
-      fs9.readdir = readdir;
+      var fs$readdir = fs11.readdir;
+      fs11.readdir = readdir;
       var noReaddirOptionVersions = /^v[0-5]\./;
-      function readdir(path9, options, cb) {
+      function readdir(path12, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path10, options2, cb2, startTime) {
-          return fs$readdir(path10, fs$readdirCallback(
-            path10,
+        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path13, options2, cb2, startTime) {
+          return fs$readdir(path13, fs$readdirCallback(
+            path13,
             options2,
             cb2,
             startTime
           ));
-        } : function go$readdir2(path10, options2, cb2, startTime) {
-          return fs$readdir(path10, options2, fs$readdirCallback(
-            path10,
+        } : function go$readdir2(path13, options2, cb2, startTime) {
+          return fs$readdir(path13, options2, fs$readdirCallback(
+            path13,
             options2,
             cb2,
             startTime
           ));
         };
-        return go$readdir(path9, options, cb);
-        function fs$readdirCallback(path10, options2, cb2, startTime) {
+        return go$readdir(path12, options, cb);
+        function fs$readdirCallback(path13, options2, cb2, startTime) {
           return function(err, files) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
               enqueue([
                 go$readdir,
-                [path10, options2, cb2],
+                [path13, options2, cb2],
                 err,
                 startTime || Date.now(),
                 Date.now()
@@ -635,21 +635,21 @@ var require_graceful_fs = __commonJS({
         }
       }
       if (process.version.substr(0, 4) === "v0.8") {
-        var legStreams = legacy(fs9);
+        var legStreams = legacy(fs11);
         ReadStream = legStreams.ReadStream;
         WriteStream = legStreams.WriteStream;
       }
-      var fs$ReadStream = fs9.ReadStream;
+      var fs$ReadStream = fs11.ReadStream;
       if (fs$ReadStream) {
         ReadStream.prototype = Object.create(fs$ReadStream.prototype);
         ReadStream.prototype.open = ReadStream$open;
       }
-      var fs$WriteStream = fs9.WriteStream;
+      var fs$WriteStream = fs11.WriteStream;
       if (fs$WriteStream) {
         WriteStream.prototype = Object.create(fs$WriteStream.prototype);
         WriteStream.prototype.open = WriteStream$open;
       }
-      Object.defineProperty(fs9, "ReadStream", {
+      Object.defineProperty(fs11, "ReadStream", {
         get: function() {
           return ReadStream;
         },
@@ -659,7 +659,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      Object.defineProperty(fs9, "WriteStream", {
+      Object.defineProperty(fs11, "WriteStream", {
         get: function() {
           return WriteStream;
         },
@@ -670,7 +670,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileReadStream = ReadStream;
-      Object.defineProperty(fs9, "FileReadStream", {
+      Object.defineProperty(fs11, "FileReadStream", {
         get: function() {
           return FileReadStream;
         },
@@ -681,7 +681,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileWriteStream = WriteStream;
-      Object.defineProperty(fs9, "FileWriteStream", {
+      Object.defineProperty(fs11, "FileWriteStream", {
         get: function() {
           return FileWriteStream;
         },
@@ -691,7 +691,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      function ReadStream(path9, options) {
+      function ReadStream(path12, options) {
         if (this instanceof ReadStream)
           return fs$ReadStream.apply(this, arguments), this;
         else
@@ -711,7 +711,7 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function WriteStream(path9, options) {
+      function WriteStream(path12, options) {
         if (this instanceof WriteStream)
           return fs$WriteStream.apply(this, arguments), this;
         else
@@ -729,22 +729,22 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function createReadStream(path9, options) {
-        return new fs9.ReadStream(path9, options);
+      function createReadStream(path12, options) {
+        return new fs11.ReadStream(path12, options);
       }
-      function createWriteStream(path9, options) {
-        return new fs9.WriteStream(path9, options);
+      function createWriteStream(path12, options) {
+        return new fs11.WriteStream(path12, options);
       }
-      var fs$open = fs9.open;
-      fs9.open = open;
-      function open(path9, flags, mode, cb) {
+      var fs$open = fs11.open;
+      fs11.open = open;
+      function open(path12, flags, mode, cb) {
         if (typeof mode === "function")
           cb = mode, mode = null;
-        return go$open(path9, flags, mode, cb);
-        function go$open(path10, flags2, mode2, cb2, startTime) {
-          return fs$open(path10, flags2, mode2, function(err, fd) {
+        return go$open(path12, flags, mode, cb);
+        function go$open(path13, flags2, mode2, cb2, startTime) {
+          return fs$open(path13, flags2, mode2, function(err, fd) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$open, [path10, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$open, [path13, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -752,20 +752,20 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      return fs9;
+      return fs11;
     }
     function enqueue(elem) {
       debug("ENQUEUE", elem[0].name, elem[1]);
-      fs8[gracefulQueue].push(elem);
+      fs10[gracefulQueue].push(elem);
       retry();
     }
     var retryTimer;
     function resetQueue() {
       var now = Date.now();
-      for (var i = 0; i < fs8[gracefulQueue].length; ++i) {
-        if (fs8[gracefulQueue][i].length > 2) {
-          fs8[gracefulQueue][i][3] = now;
-          fs8[gracefulQueue][i][4] = now;
+      for (var i = 0; i < fs10[gracefulQueue].length; ++i) {
+        if (fs10[gracefulQueue][i].length > 2) {
+          fs10[gracefulQueue][i][3] = now;
+          fs10[gracefulQueue][i][4] = now;
         }
       }
       retry();
@@ -773,9 +773,9 @@ var require_graceful_fs = __commonJS({
     function retry() {
       clearTimeout(retryTimer);
       retryTimer = void 0;
-      if (fs8[gracefulQueue].length === 0)
+      if (fs10[gracefulQueue].length === 0)
         return;
-      var elem = fs8[gracefulQueue].shift();
+      var elem = fs10[gracefulQueue].shift();
       var fn = elem[0];
       var args = elem[1];
       var err = elem[2];
@@ -797,7 +797,7 @@ var require_graceful_fs = __commonJS({
           debug("RETRY", fn.name, args);
           fn.apply(null, args.concat([startTime]));
         } else {
-          fs8[gracefulQueue].push(elem);
+          fs10[gracefulQueue].push(elem);
         }
       }
       if (retryTimer === void 0) {
@@ -1232,10 +1232,10 @@ var require_mtime_precision = __commonJS({
   "node_modules/proper-lockfile/lib/mtime-precision.js"(exports2, module2) {
     "use strict";
     var cacheSymbol = Symbol();
-    function probe(file, fs8, callback) {
-      const cachedPrecision = fs8[cacheSymbol];
+    function probe(file, fs10, callback) {
+      const cachedPrecision = fs10[cacheSymbol];
       if (cachedPrecision) {
-        return fs8.stat(file, (err, stat) => {
+        return fs10.stat(file, (err, stat) => {
           if (err) {
             return callback(err);
           }
@@ -1243,16 +1243,16 @@ var require_mtime_precision = __commonJS({
         });
       }
       const mtime = new Date(Math.ceil(Date.now() / 1e3) * 1e3 + 5);
-      fs8.utimes(file, mtime, mtime, (err) => {
+      fs10.utimes(file, mtime, mtime, (err) => {
         if (err) {
           return callback(err);
         }
-        fs8.stat(file, (err2, stat) => {
+        fs10.stat(file, (err2, stat) => {
           if (err2) {
             return callback(err2);
           }
           const precision = stat.mtime.getTime() % 1e3 === 0 ? "s" : "ms";
-          Object.defineProperty(fs8, cacheSymbol, { value: precision });
+          Object.defineProperty(fs10, cacheSymbol, { value: precision });
           callback(null, stat.mtime, precision);
         });
       });
@@ -1273,8 +1273,8 @@ var require_mtime_precision = __commonJS({
 var require_lockfile = __commonJS({
   "node_modules/proper-lockfile/lib/lockfile.js"(exports2, module2) {
     "use strict";
-    var path9 = require("path");
-    var fs8 = require_graceful_fs();
+    var path12 = require("path");
+    var fs10 = require_graceful_fs();
     var retry = require_retry2();
     var onExit = require_signal_exit();
     var mtimePrecision = require_mtime_precision();
@@ -1284,7 +1284,7 @@ var require_lockfile = __commonJS({
     }
     function resolveCanonicalPath(file, options, callback) {
       if (!options.realpath) {
-        return callback(null, path9.resolve(file));
+        return callback(null, path12.resolve(file));
       }
       options.fs.realpath(file, callback);
     }
@@ -1405,7 +1405,7 @@ var require_lockfile = __commonJS({
         update: null,
         realpath: true,
         retries: 0,
-        fs: fs8,
+        fs: fs10,
         onCompromised: (err) => {
           throw err;
         },
@@ -1449,7 +1449,7 @@ var require_lockfile = __commonJS({
     }
     function unlock(file, options, callback) {
       options = {
-        fs: fs8,
+        fs: fs10,
         realpath: true,
         ...options
       };
@@ -1471,7 +1471,7 @@ var require_lockfile = __commonJS({
       options = {
         stale: 1e4,
         realpath: true,
-        fs: fs8,
+        fs: fs10,
         ...options
       };
       options.stale = Math.max(options.stale || 0, 2e3);
@@ -1510,16 +1510,16 @@ var require_lockfile = __commonJS({
 var require_adapter = __commonJS({
   "node_modules/proper-lockfile/lib/adapter.js"(exports2, module2) {
     "use strict";
-    var fs8 = require_graceful_fs();
-    function createSyncFs(fs9) {
+    var fs10 = require_graceful_fs();
+    function createSyncFs(fs11) {
       const methods = ["mkdir", "realpath", "stat", "rmdir", "utimes"];
-      const newFs = { ...fs9 };
+      const newFs = { ...fs11 };
       methods.forEach((method) => {
         newFs[method] = (...args) => {
           const callback = args.pop();
           let ret;
           try {
-            ret = fs9[`${method}Sync`](...args);
+            ret = fs11[`${method}Sync`](...args);
           } catch (err) {
             return callback(err);
           }
@@ -1529,12 +1529,12 @@ var require_adapter = __commonJS({
       return newFs;
     }
     function toPromise(method) {
-      return (...args) => new Promise((resolve, reject) => {
+      return (...args) => new Promise((resolve2, reject) => {
         args.push((err, result) => {
           if (err) {
             reject(err);
           } else {
-            resolve(result);
+            resolve2(result);
           }
         });
         method(...args);
@@ -1557,7 +1557,7 @@ var require_adapter = __commonJS({
     }
     function toSyncOptions(options) {
       options = { ...options };
-      options.fs = createSyncFs(options.fs || fs8);
+      options.fs = createSyncFs(options.fs || fs10);
       if (typeof options.retries === "number" && options.retries > 0 || options.retries && typeof options.retries.retries === "number" && options.retries.retries > 0) {
         throw Object.assign(new Error("Cannot use retries with the sync api"), { code: "ESYNC" });
       }
@@ -3809,8 +3809,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize) {
-      if (normalize !== false)
+    function getFullPath(resolver, id = "", normalize3) {
+      if (normalize3 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -4558,7 +4558,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -4585,7 +4585,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -4800,8 +4800,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path9) {
-      let input = path9;
+    function removeDotSegments(path12) {
+      let input = path12;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -5000,8 +5000,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path9, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
+        const [path12, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path12 && path12 !== "/" ? path12 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -5150,7 +5150,7 @@ var require_fast_uri = __commonJS({
     "use strict";
     var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizeComponentEncoding, isIPv4, nonSimpleDomain } = require_utils();
     var { SCHEMES, getSchemeHandler } = require_schemes();
-    function normalize(uri, options) {
+    function normalize3(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         serialize(parse(uri, options), options);
@@ -5160,55 +5160,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse(baseURI, schemelessOptions), parse(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative, options, skipNormalization) {
+    function resolveComponent(base, relative3, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse(serialize(base, options), options);
-        relative = parse(serialize(relative, options), options);
+        relative3 = parse(serialize(relative3, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative.scheme) {
-        target.scheme = relative.scheme;
-        target.userinfo = relative.userinfo;
-        target.host = relative.host;
-        target.port = relative.port;
-        target.path = removeDotSegments(relative.path || "");
-        target.query = relative.query;
+      if (!options.tolerant && relative3.scheme) {
+        target.scheme = relative3.scheme;
+        target.userinfo = relative3.userinfo;
+        target.host = relative3.host;
+        target.port = relative3.port;
+        target.path = removeDotSegments(relative3.path || "");
+        target.query = relative3.query;
       } else {
-        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
-          target.userinfo = relative.userinfo;
-          target.host = relative.host;
-          target.port = relative.port;
-          target.path = removeDotSegments(relative.path || "");
-          target.query = relative.query;
+        if (relative3.userinfo !== void 0 || relative3.host !== void 0 || relative3.port !== void 0) {
+          target.userinfo = relative3.userinfo;
+          target.host = relative3.host;
+          target.port = relative3.port;
+          target.path = removeDotSegments(relative3.path || "");
+          target.query = relative3.query;
         } else {
-          if (!relative.path) {
+          if (!relative3.path) {
             target.path = base.path;
-            if (relative.query !== void 0) {
-              target.query = relative.query;
+            if (relative3.query !== void 0) {
+              target.query = relative3.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative.path[0] === "/") {
-              target.path = removeDotSegments(relative.path);
+            if (relative3.path[0] === "/") {
+              target.path = removeDotSegments(relative3.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative.path;
+                target.path = "/" + relative3.path;
               } else if (!base.path) {
-                target.path = relative.path;
+                target.path = relative3.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative3.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative.query;
+            target.query = relative3.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -5216,7 +5216,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative.fragment;
+      target.fragment = relative3.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -5386,8 +5386,8 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize,
-      resolve,
+      normalize: normalize3,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
@@ -16012,14 +16012,15 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode7 = __toESM(require("vscode"));
+var vscode8 = __toESM(require("vscode"));
 
 // src/orchestration/paths.ts
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs"));
-var vscode = __toESM(require("vscode"));
 function workspaceRoot() {
-  const folder = vscode.workspace.workspaceFolders?.[0];
+  const moduleName = "vscode";
+  const vscode9 = require(moduleName);
+  const folder = vscode9.workspace.workspaceFolders?.[0];
   return folder?.uri.fsPath;
 }
 function paths(root) {
@@ -16118,7 +16119,7 @@ var import_ajv = __toESM(require_ajv());
 // shared/schema.ts
 var WORKFLOW_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
-  $id: "https://local/claude-orchestrator/workflow.schema.json",
+  $id: "https://local/vscode-agent-orchestrator/workflow.schema.json",
   type: "object",
   required: ["version", "id", "name", "settings", "nodes", "edges"],
   additionalProperties: true,
@@ -16146,7 +16147,7 @@ var WORKFLOW_SCHEMA = {
         properties: {
           id: { type: "string", pattern: "^[a-zA-Z0-9_-]+$" },
           label: { type: "string", minLength: 1 },
-          agent: { type: "string", minLength: 1 },
+          agent: { type: "string" },
           trigger: {
             oneOf: [
               {
@@ -16177,11 +16178,49 @@ var WORKFLOW_SCHEMA = {
                 type: "object",
                 required: ["type", "glob"],
                 properties: { type: { const: "fileChange" }, glob: { type: "string" } }
+              },
+              {
+                type: "object",
+                required: ["type"],
+                properties: {
+                  type: { const: "startup" },
+                  delaySeconds: { type: "integer", minimum: 0, maximum: 3600 }
+                }
+              },
+              {
+                type: "object",
+                required: ["type", "glob", "severity"],
+                properties: {
+                  type: { const: "diagnostics" },
+                  glob: { type: "string", minLength: 1 },
+                  severity: { enum: ["any", "error", "warning", "info", "hint"] },
+                  debounceMs: { type: "integer", minimum: 100, maximum: 6e4 }
+                }
               }
             ]
           },
           context: { type: "string" },
-          model: { type: ["string", "null"] },
+          model: {
+            oneOf: [
+              { type: "null" },
+              {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  vendor: { type: "string", minLength: 1 },
+                  family: { type: "string", minLength: 1 },
+                  id: { type: "string", minLength: 1 },
+                  version: { type: "string", minLength: 1 }
+                },
+                anyOf: [
+                  { required: ["vendor"] },
+                  { required: ["family"] },
+                  { required: ["id"] },
+                  { required: ["version"] }
+                ]
+              }
+            ]
+          },
           permissions: { enum: ["ask", "allow", "deny"] },
           position: {
             type: "object",
@@ -16369,39 +16408,133 @@ var path5 = __toESM(require("path"));
 var os = __toESM(require("os"));
 async function listAgents(workspaceRoot2) {
   const out = [];
-  const userDir = path5.join(os.homedir(), ".claude", "agents");
-  await collect(userDir, "user", out);
+  for (const userDir of userAgentDirs()) {
+    await collect(userDir, "user", out);
+  }
   if (workspaceRoot2) {
-    const projectDir = path5.join(workspaceRoot2, ".claude", "agents");
-    await collect(projectDir, "project", out);
+    await collect(path5.join(workspaceRoot2, ".github", "agents"), "workspace", out);
   }
   const byId = /* @__PURE__ */ new Map();
   for (const a of out) {
     const existing = byId.get(a.id);
-    if (!existing || a.source === "project") byId.set(a.id, a);
+    if (!existing || a.source === "workspace") byId.set(a.id, a);
   }
   return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+}
+async function getAgent(workspaceRoot2, id) {
+  const agents = await listAgents(workspaceRoot2);
+  return agents.find((agent) => agent.id === id) ?? null;
+}
+function userAgentDirs() {
+  const dirs = /* @__PURE__ */ new Set();
+  if (process.env.VSCODE_USER_PROMPTS_FOLDER) {
+    dirs.add(process.env.VSCODE_USER_PROMPTS_FOLDER);
+  }
+  if (process.env.APPDATA) {
+    dirs.add(path5.join(process.env.APPDATA, "Code", "User", "prompts"));
+    dirs.add(path5.join(process.env.APPDATA, "Code - Insiders", "User", "prompts"));
+  }
+  if (process.platform === "darwin") {
+    dirs.add(path5.join(os.homedir(), "Library", "Application Support", "Code", "User", "prompts"));
+    dirs.add(path5.join(os.homedir(), "Library", "Application Support", "Code - Insiders", "User", "prompts"));
+  }
+  if (process.platform === "linux") {
+    dirs.add(path5.join(os.homedir(), ".config", "Code", "User", "prompts"));
+    dirs.add(path5.join(os.homedir(), ".config", "Code - Insiders", "User", "prompts"));
+  }
+  return Array.from(dirs);
 }
 async function collect(dir, source, out) {
   if (!fs5.existsSync(dir)) return;
   const files = await fs5.promises.readdir(dir);
   for (const f of files) {
-    if (!f.endsWith(".md")) continue;
-    const id = f.slice(0, -3);
+    if (!f.endsWith(".agent.md")) continue;
+    const id = f.slice(0, -".agent.md".length);
     const full = path5.join(dir, f);
-    let label = id;
     try {
-      const head = (await fs5.promises.readFile(full, "utf8")).slice(0, 800);
-      const fmName = head.match(/^name:\s*(.+)$/m);
-      if (fmName) label = fmName[1].trim().replace(/^["']|["']$/g, "");
+      const parsed = parseAgentFile(await fs5.promises.readFile(full, "utf8"));
+      if (parsed.userInvocable === false) continue;
+      out.push({
+        id,
+        label: parsed.name ?? id,
+        description: parsed.description,
+        defaultModel: parsed.model,
+        instructions: parsed.instructions,
+        path: full,
+        source
+      });
     } catch {
     }
-    out.push({ id, label, path: full, source });
   }
+}
+function parseAgentFile(raw) {
+  const match = raw.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*\r?\n?/);
+  const frontmatter = match?.[1] ?? "";
+  const instructions = match ? raw.slice(match[0].length).trim() : raw.trim();
+  return {
+    name: frontmatterValue(frontmatter, "name"),
+    description: frontmatterValue(frontmatter, "description"),
+    model: frontmatterValue(frontmatter, "model"),
+    userInvocable: frontmatterBoolean(frontmatter, "user-invocable"),
+    instructions
+  };
+}
+function frontmatterValue(frontmatter, key) {
+  const match = frontmatter.match(new RegExp(`^${escapeRegExp(key)}\\s*:\\s*(.+)$`, "m"));
+  if (!match) return void 0;
+  return match[1].trim().replace(/^["']|["']$/g, "");
+}
+function frontmatterBoolean(frontmatter, key) {
+  const value = frontmatterValue(frontmatter, key)?.toLowerCase();
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return void 0;
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// src/orchestration/node-resolver.ts
+function resolveWorkflowNode(workflow, rawReference) {
+  const reference = rawReference.trim();
+  if (!workflow || reference.length === 0) {
+    return { node: null, matches: [], reason: "empty" };
+  }
+  const exactId = workflow.nodes.find((node) => equals(node.id, reference));
+  if (exactId) return { node: exactId, matches: [exactId], reason: "matched" };
+  const exactLabel = workflow.nodes.filter((node) => equals(node.label, reference));
+  if (exactLabel.length === 1) return { node: exactLabel[0], matches: exactLabel, reason: "matched" };
+  if (exactLabel.length > 1) return { node: null, matches: exactLabel, reason: "ambiguous" };
+  const exactAgent = workflow.nodes.filter((node) => node.agent && equals(node.agent, reference));
+  if (exactAgent.length === 1) return { node: exactAgent[0], matches: exactAgent, reason: "matched" };
+  if (exactAgent.length > 1) return { node: null, matches: exactAgent, reason: "ambiguous" };
+  const normalizedReference = normalize(reference);
+  const fuzzy = workflow.nodes.filter((node) => {
+    const labels = [node.label, node.id, node.agent].filter(Boolean).map(normalize);
+    return labels.some(
+      (value) => value === normalizedReference || value.includes(normalizedReference) || normalizedReference.includes(value)
+    );
+  });
+  if (fuzzy.length === 1) return { node: fuzzy[0], matches: fuzzy, reason: "matched" };
+  if (fuzzy.length > 1) return { node: null, matches: fuzzy, reason: "ambiguous" };
+  return { node: null, matches: [], reason: "not-found" };
+}
+function formatNodeReference(node) {
+  return node.label.trim() ? node.label.trim() : node.id;
+}
+function nodeSuggestions(workflow, limit = 5) {
+  if (!workflow || workflow.nodes.length === 0) return "";
+  return workflow.nodes.slice(0, limit).map((node) => `\`${formatNodeReference(node)}\``).join(", ");
+}
+function equals(left, right) {
+  return left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0;
+}
+function normalize(value) {
+  return value.trim().toLocaleLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 // src/runtime/dispatcher.ts
-var vscode2 = __toESM(require("vscode"));
+var vscode = __toESM(require("vscode"));
 var CHAT_PARTICIPANT_NAME = "@orchestrator";
 var Dispatcher = class {
   constructor(ledger, getWorkflow) {
@@ -16410,7 +16543,7 @@ var Dispatcher = class {
   }
   inFlight = 0;
   async fireNode(node, ctx) {
-    const config = vscode2.workspace.getConfiguration("vscodeAgentOrchestrator");
+    const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
     if (!config.get("enabled", true)) {
       await this.ledger.append({
         type: "guardrail.tripped",
@@ -16442,7 +16575,7 @@ var Dispatcher = class {
           action: "halted",
           eventId: ctx.rootEventId
         });
-        vscode2.window.showWarningMessage(
+        vscode.window.showWarningMessage(
           `Agent Orchestrator: daily spawn cap (${wf.settings.dailyHandoffCap}) reached. Edit workflows.json or use Emergency Stop.`
         );
         return;
@@ -16462,16 +16595,16 @@ var Dispatcher = class {
     const query = `${CHAT_PARTICIPANT_NAME} /run ${node.id} ${triggerTag}`;
     this.inFlight++;
     try {
-      await vscode2.commands.executeCommand("workbench.action.chat.open", { query });
+      await vscode.commands.executeCommand("workbench.action.chat.open", { query });
     } catch (err) {
       try {
-        await vscode2.commands.executeCommand("workbench.action.chat.open");
-        await vscode2.env.clipboard.writeText(query);
-        vscode2.window.showInformationMessage(
+        await vscode.commands.executeCommand("workbench.action.chat.open");
+        await vscode.env.clipboard.writeText(query);
+        vscode.window.showInformationMessage(
           `Agent Orchestrator: trigger fired but the chat command refused a prefilled query. Query was copied to your clipboard \u2014 paste it into the chat input. Underlying error: ${err instanceof Error ? err.message : err}`
         );
       } catch {
-        vscode2.window.showErrorMessage(
+        vscode.window.showErrorMessage(
           `Agent Orchestrator: failed to open chat for ${node.id}. Make sure VS Code's chat view is available.`
         );
       }
@@ -16548,8 +16681,9 @@ var TimerTrigger = class {
 };
 
 // src/runtime/triggers/handoff-trigger.ts
-var vscode3 = __toESM(require("vscode"));
+var vscode2 = __toESM(require("vscode"));
 var path6 = __toESM(require("path"));
+var fs6 = __toESM(require("fs"));
 var HandoffTrigger = class {
   constructor(node, p, deps) {
     this.node = node;
@@ -16563,9 +16697,13 @@ var HandoffTrigger = class {
   pendingFiles = /* @__PURE__ */ new Set();
   start() {
     const dir = inboxDir(this.p, this.node.id);
-    const pattern = new vscode3.RelativePattern(vscode3.Uri.file(dir), "*.json");
-    this.watcher = vscode3.workspace.createFileSystemWatcher(pattern, false, true, true);
+    fs6.mkdirSync(dir, { recursive: true });
+    const pattern = new vscode2.RelativePattern(vscode2.Uri.file(dir), "*.json");
+    this.watcher = vscode2.workspace.createFileSystemWatcher(pattern, false, true, true);
     this.watcher.onDidCreate((uri) => this.onFile(uri.fsPath));
+    for (const fileName of fs6.readdirSync(dir)) {
+      if (fileName.endsWith(".json")) this.onFile(path6.join(dir, fileName));
+    }
   }
   dispose() {
     if (this.watcher) {
@@ -16595,8 +16733,8 @@ var HandoffTrigger = class {
 };
 
 // src/runtime/triggers/gh-pr-trigger.ts
-var vscode4 = __toESM(require("vscode"));
-var fs6 = __toESM(require("fs"));
+var vscode3 = __toESM(require("vscode"));
+var fs7 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
 var import_child_process = require("child_process");
 var import_util = require("util");
@@ -16614,7 +16752,7 @@ var GhPrTrigger = class {
   interval = null;
   disposed = false;
   start() {
-    const cfg = vscode4.workspace.getConfiguration("claudeOrchestrator");
+    const cfg = vscode3.workspace.getConfiguration("vscodeAgentOrchestrator");
     const seconds = Math.max(15, cfg.get("ghPollSeconds", 60));
     void this.poll();
     this.interval = setInterval(() => void this.poll(), seconds * 1e3);
@@ -16656,7 +16794,17 @@ var GhPrTrigger = class {
     }
     const state = await loadState(this.p);
     const perNode = state.perNode[this.node.id] ?? { seen: {} };
-    const branchFilter = this.cfg.branchFilter ? new RegExp(this.cfg.branchFilter) : null;
+    let branchFilter = null;
+    if (this.cfg.branchFilter) {
+      try {
+        branchFilter = new RegExp(this.cfg.branchFilter);
+      } catch (err) {
+        this.deps.log(
+          `Invalid branchFilter for ${this.cfg.repo} on node ${this.node.id}: ${err instanceof Error ? err.message : err}`,
+          "warn"
+        );
+      }
+    }
     for (const pr of prs) {
       if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
       const prevSha = perNode.seen[String(pr.number)];
@@ -16696,16 +16844,245 @@ var GhPrTrigger = class {
   }
 };
 async function loadState(p) {
-  if (!fs6.existsSync(p.triggersStateJson)) return { perNode: {} };
+  if (!fs7.existsSync(p.triggersStateJson)) return { perNode: {} };
   try {
-    return JSON.parse(await fs6.promises.readFile(p.triggersStateJson, "utf8"));
+    return JSON.parse(await fs7.promises.readFile(p.triggersStateJson, "utf8"));
   } catch {
     return { perNode: {} };
   }
 }
 async function saveState(p, state) {
-  await fs6.promises.mkdir(path7.dirname(p.triggersStateJson), { recursive: true });
-  await fs6.promises.writeFile(p.triggersStateJson, JSON.stringify(state, null, 2), "utf8");
+  await fs7.promises.mkdir(path7.dirname(p.triggersStateJson), { recursive: true });
+  await fs7.promises.writeFile(p.triggersStateJson, JSON.stringify(state, null, 2), "utf8");
+}
+
+// src/runtime/triggers/file-change-trigger.ts
+var path8 = __toESM(require("path"));
+var vscode4 = __toESM(require("vscode"));
+var FileChangeTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  watcher = null;
+  debounceTimer = null;
+  pendingFiles = /* @__PURE__ */ new Map();
+  start() {
+    const pattern = new vscode4.RelativePattern(vscode4.Uri.file(this.p.workspaceRoot), this.cfg.glob);
+    this.watcher = vscode4.workspace.createFileSystemWatcher(pattern, false, false, false);
+    this.watcher.onDidCreate((uri) => this.onFile("created", uri));
+    this.watcher.onDidChange((uri) => this.onFile("changed", uri));
+    this.watcher.onDidDelete((uri) => this.onFile("deleted", uri));
+  }
+  dispose() {
+    if (this.watcher) {
+      this.watcher.dispose();
+      this.watcher = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingFiles.clear();
+  }
+  onFile(event, uri) {
+    const relativePath = path8.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
+    this.pendingFiles.set(relativePath, { path: relativePath, event });
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => void this.flush(), 500);
+  }
+  async flush() {
+    const files = Array.from(this.pendingFiles.values());
+    this.pendingFiles.clear();
+    if (files.length === 0) return;
+    try {
+      const payload = this.bus.buildPayload({
+        from: "external",
+        to: this.node.id,
+        edgeId: null,
+        trigger: { type: "fileChange", glob: this.cfg.glob, fileCount: files.length },
+        payload: { glob: this.cfg.glob, files }
+      });
+      await this.bus.deliver(payload);
+      await this.deps.fire(this.node, { glob: this.cfg.glob, fileCount: files.length });
+    } catch (err) {
+      this.deps.log(
+        `File change trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+
+// src/runtime/triggers/startup-trigger.ts
+var StartupTrigger = class {
+  constructor(node, cfg, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  timeout = null;
+  disposed = false;
+  start() {
+    const delayMs = Math.max(0, this.cfg.delaySeconds ?? 3) * 1e3;
+    this.timeout = setTimeout(() => {
+      if (this.disposed) return;
+      this.deps.fire(this.node, { delaySeconds: this.cfg.delaySeconds ?? 3 }).catch((err) => {
+        this.deps.log(
+          `Startup trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+          "error"
+        );
+      });
+    }, delayMs);
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+  }
+};
+
+// src/runtime/triggers/diagnostics-trigger.ts
+var path9 = __toESM(require("path"));
+var vscode5 = __toESM(require("vscode"));
+var DiagnosticsTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+    this.globPattern = compileGlob(cfg.glob);
+  }
+  nodeId;
+  disposable = null;
+  debounceTimer = null;
+  pendingUris = /* @__PURE__ */ new Map();
+  globPattern;
+  start() {
+    this.disposable = vscode5.languages.onDidChangeDiagnostics((event) => {
+      this.queue(event.uris);
+    });
+  }
+  dispose() {
+    if (this.disposable) {
+      this.disposable.dispose();
+      this.disposable = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingUris.clear();
+  }
+  queue(uris) {
+    for (const uri of uris) {
+      if (uri.scheme !== "file") continue;
+      const relativePath = path9.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
+      if (relativePath.startsWith("..") || path9.isAbsolute(relativePath)) continue;
+      if (!this.globPattern.test(relativePath)) continue;
+      this.pendingUris.set(uri.fsPath, uri);
+    }
+    if (this.pendingUris.size === 0) return;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => void this.flush(), this.cfg.debounceMs ?? 1e3);
+  }
+  async flush() {
+    const uris = Array.from(this.pendingUris.values());
+    this.pendingUris.clear();
+    const files = uris.map((uri) => ({ uri, path: path9.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/") })).map(({ uri, path: relativePath }) => ({
+      path: relativePath,
+      diagnostics: vscode5.languages.getDiagnostics(uri).filter((diagnostic) => severityMatches(diagnostic.severity, this.cfg.severity)).slice(0, 20).map((diagnostic) => ({
+        severity: severityLabel(diagnostic.severity),
+        message: diagnostic.message,
+        source: diagnostic.source,
+        code: typeof diagnostic.code === "object" ? String(diagnostic.code.value) : diagnostic.code,
+        range: {
+          startLine: diagnostic.range.start.line + 1,
+          startCharacter: diagnostic.range.start.character + 1,
+          endLine: diagnostic.range.end.line + 1,
+          endCharacter: diagnostic.range.end.character + 1
+        }
+      }))
+    })).filter((file) => file.diagnostics.length > 0).slice(0, 25);
+    const diagnosticCount = files.reduce((total, file) => total + file.diagnostics.length, 0);
+    if (diagnosticCount === 0) return;
+    try {
+      const payload = this.bus.buildPayload({
+        from: "external",
+        to: this.node.id,
+        edgeId: null,
+        trigger: {
+          type: "diagnostics",
+          glob: this.cfg.glob,
+          severity: this.cfg.severity,
+          fileCount: files.length,
+          diagnosticCount
+        },
+        payload: { glob: this.cfg.glob, severity: this.cfg.severity, files }
+      });
+      await this.bus.deliver(payload);
+      await this.deps.fire(this.node, { fileCount: files.length, diagnosticCount, severity: this.cfg.severity });
+    } catch (err) {
+      this.deps.log(
+        `Diagnostics trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+function severityMatches(actual, configured) {
+  if (configured === "any") return true;
+  return severityLabel(actual) === configured;
+}
+function severityLabel(severity) {
+  switch (severity) {
+    case vscode5.DiagnosticSeverity.Error:
+      return "error";
+    case vscode5.DiagnosticSeverity.Warning:
+      return "warning";
+    case vscode5.DiagnosticSeverity.Information:
+      return "info";
+    case vscode5.DiagnosticSeverity.Hint:
+    default:
+      return "hint";
+  }
+}
+function compileGlob(glob) {
+  const normalized = glob.trim().replace(/\\/g, "/") || "**/*";
+  let pattern = "^";
+  for (let index = 0; index < normalized.length; index++) {
+    const char = normalized[index];
+    const next = normalized[index + 1];
+    const afterNext = normalized[index + 2];
+    if (char === "*" && next === "*" && afterNext === "/") {
+      pattern += "(?:.*/)?";
+      index += 2;
+    } else if (char === "*" && next === "*") {
+      pattern += ".*";
+      index += 1;
+    } else if (char === "*") {
+      pattern += "[^/]*";
+    } else if (char === "?") {
+      pattern += "[^/]";
+    } else {
+      pattern += escapeRegExp2(char);
+    }
+  }
+  return new RegExp(`${pattern}$`, "i");
+}
+function escapeRegExp2(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // src/runtime/trigger-registry.ts
@@ -16766,8 +17143,13 @@ var TriggerRegistry = class {
         return new HandoffTrigger(node, this.p, deps);
       case "ghPr":
         return new GhPrTrigger(node, node.trigger, this.p, this.bus, deps);
-      case "manual":
       case "fileChange":
+        return new FileChangeTrigger(node, node.trigger, this.p, this.bus, deps);
+      case "startup":
+        return new StartupTrigger(node, node.trigger, deps);
+      case "diagnostics":
+        return new DiagnosticsTrigger(node, node.trigger, this.p, this.bus, deps);
+      case "manual":
       default:
         return null;
     }
@@ -16775,86 +17157,122 @@ var TriggerRegistry = class {
 };
 
 // src/runtime/chat-participant.ts
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
+
+// src/runtime/node-runner.ts
 var import_ulid2 = __toESM(require_index_umd());
+
+// src/runtime/file-artifacts.ts
+var fs8 = __toESM(require("fs"));
+var path10 = __toESM(require("path"));
+var WRITE_FILE_BLOCK_RE = /<<WRITE_FILE\s+path=(?:"([^"]+)"|'([^']+)'|([^\s>]+))\s*>>([\s\S]*?)<<END_WRITE_FILE>>/g;
+async function writeNodeFileArtifacts(args) {
+  const writeBlocks = parseWriteFileBlocks(args.assistantText);
+  if (writeBlocks.length > 0) {
+    const results = [];
+    for (const block of writeBlocks) {
+      const targetPath2 = resolveTargetPath(block.path, args.workspaceRoot);
+      await fs8.promises.mkdir(path10.dirname(targetPath2), { recursive: true });
+      await fs8.promises.writeFile(targetPath2, block.content, "utf8");
+      results.push({ path: targetPath2, bytes: Buffer.byteLength(block.content, "utf8"), mode: "write", source: "writeBlock" });
+    }
+    return results;
+  }
+  if (!shouldWriteMarkdownFallback(args.node, args.drained)) return [];
+  const targetPath = resolveMarkdownFallbackPath(args.node, args.workspaceRoot);
+  const entry = buildMarkdownFallbackEntry(args.node, args.drained);
+  await fs8.promises.mkdir(path10.dirname(targetPath), { recursive: true });
+  const exists = fs8.existsSync(targetPath);
+  const content = `${exists ? "\n\n---\n\n" : `# ${args.node.label} Handoff Log
+
+`}${entry}`;
+  await fs8.promises.appendFile(targetPath, content, "utf8");
+  return [{ path: targetPath, bytes: Buffer.byteLength(content, "utf8"), mode: "append", source: "markdownFallback" }];
+}
+function parseWriteFileBlocks(text) {
+  const blocks = [];
+  WRITE_FILE_BLOCK_RE.lastIndex = 0;
+  let match;
+  while ((match = WRITE_FILE_BLOCK_RE.exec(text)) !== null) {
+    const requestedPath = (match[1] ?? match[2] ?? match[3] ?? "").trim();
+    if (!requestedPath) continue;
+    blocks.push({ path: requestedPath, content: stripOuterFence(match[4].trim()) });
+  }
+  return blocks;
+}
+function shouldWriteMarkdownFallback(node, drained) {
+  if (drained.length === 0) return false;
+  const context = node.context.toLocaleLowerCase();
+  return /\b(document|save|write|create)\b/.test(context) && (/\.md\b/.test(context) || /markdown/.test(context));
+}
+function resolveMarkdownFallbackPath(node, workspaceRoot2) {
+  const target = extractSaveTarget(node.context);
+  if (!target) return path10.join(workspaceRoot2, `${slug(node.label)}-handoff-log.md`);
+  const resolved = resolveTargetPath(target, workspaceRoot2);
+  if (path10.extname(resolved).toLocaleLowerCase() === ".md") return resolved;
+  return path10.join(resolved, `${slug(node.label)}-handoff-log.md`);
+}
+function extractSaveTarget(context) {
+  const matches = Array.from(context.matchAll(/\bto\s+(.+?)(?=(?:[.;]\s+\b(?:save|write|create)\b)|$)/gim));
+  if (matches.length === 0) return null;
+  const target = cleanTarget(matches[matches.length - 1][1]);
+  return isGenericTarget(target) ? null : target;
+}
+function isGenericTarget(value) {
+  return /^(?:a|an|the)\s+/.test(value.toLocaleLowerCase()) || value.toLocaleLowerCase() === "markdown";
+}
+function cleanTarget(value) {
+  return value.trim().replace(/^`|`$/g, "").replace(/^["']|["']$/g, "").replace(/[.;,]+$/g, "").trim();
+}
+function resolveTargetPath(requestedPath, workspaceRoot2) {
+  const cleaned = cleanTarget(requestedPath);
+  return path10.isAbsolute(cleaned) ? path10.normalize(cleaned) : path10.resolve(workspaceRoot2, cleaned);
+}
+function buildMarkdownFallbackEntry(node, drained) {
+  const lines = [];
+  lines.push(`## Entry: ${(/* @__PURE__ */ new Date()).toISOString()}`);
+  lines.push("");
+  lines.push(`### Received By`);
+  lines.push(`- Node ID: \`${node.id}\``);
+  lines.push(`- Label: \`${node.label}\``);
+  lines.push("");
+  for (const handoff of drained) {
+    lines.push(`### Handoff ${handoff.id}`);
+    lines.push(`- From: \`${handoff.from}\``);
+    lines.push(`- To: \`${handoff.to}\``);
+    if (handoff.edgeId) lines.push(`- Edge ID: \`${handoff.edgeId}\``);
+    lines.push(`- Trace root ID: \`${handoff.trace.rootId}\``);
+    lines.push(`- Trace depth: \`${handoff.trace.depth}\``);
+    lines.push("");
+    lines.push("#### Payload");
+    lines.push(formatPayload(handoff.payload));
+    lines.push("");
+  }
+  return lines.join("\n").trimEnd();
+}
+function formatPayload(payload) {
+  const response = payload.response;
+  if (typeof response === "string" && response.trim()) return response.trim();
+  return ["```json", JSON.stringify(payload, null, 2), "```"].join("\n");
+}
+function stripOuterFence(value) {
+  return value.replace(/^```(?:\w+)?\s*/i, "").replace(/```$/i, "").trimEnd() + "\n";
+}
+function slug(value) {
+  return value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "node";
+}
+
+// src/runtime/node-runner.ts
 var TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
 var HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
-function registerChatParticipant(context, deps) {
-  const handler = async (request, ctx, stream, token) => {
-    try {
-      const command = request.command;
-      const prompt = (request.prompt ?? "").trim();
-      if (command === "list" || !command && prompt === "") {
-        return listNodes(deps, stream);
-      }
-      let nodeId;
-      let userText;
-      if (command === "run" || !command) {
-        const split = prompt.split(/\s+/);
-        nodeId = split[0] ?? "";
-        userText = split.slice(1).join(" ").trim();
-      } else {
-        nodeId = command;
-        userText = prompt;
-      }
-      const workflow = deps.getWorkflow();
-      if (!workflow) {
-        stream.markdown(
-          "No workflow loaded. Open the graph editor with **Agent Orchestrator: Open Graph Editor** first."
-        );
-        return {};
-      }
-      const node = workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) {
-        stream.markdown(
-          `No node with id \`${nodeId || "(empty)"}\` in the active workflow. Try \`@orchestrator /list\`.`
-        );
-        return {};
-      }
-      if (!node.enabled) {
-        stream.markdown(`Node \`${nodeId}\` is disabled. Enable it in the graph editor first.`);
-        return {};
-      }
-      return await runNode({ deps, node, request, ctx, stream, token, userText });
-    } catch (err) {
-      stream.markdown(
-        `**Orchestrator error:** ${err instanceof Error ? err.message : String(err)}`
-      );
-      await deps.ledger.append({
-        type: "session.errored",
-        error: err instanceof Error ? err.message : String(err)
-      });
-      return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
-    }
-  };
-  const participant = vscode5.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
-  participant.iconPath = new vscode5.ThemeIcon("organization");
-  context.subscriptions.push(participant);
-  return participant;
-}
-function listNodes(deps, stream) {
-  const wf = deps.getWorkflow();
-  if (!wf || wf.nodes.length === 0) {
-    stream.markdown("No nodes defined. Open the graph editor and create one.");
-    return {};
-  }
-  stream.markdown(`**Workflow: ${wf.name}** (${wf.nodes.length} nodes)
-
-`);
-  for (const n of wf.nodes) {
-    const trig = n.trigger.type;
-    stream.markdown(
-      `- **\`${n.id}\`** \u2014 ${n.label}${n.enabled ? "" : " *(disabled)*"} \xB7 trigger: \`${trig}\`
-`
-    );
-  }
-  stream.markdown(`
-Run a node with \`@orchestrator /run <id>\`.`);
-  return {};
-}
-async function runNode(args) {
-  const { deps, node, request, ctx, stream, token, userText } = args;
+async function runWorkflowNode(args) {
+  const { deps, node, userText = "", history = [] } = args;
   const eventId = (0, import_ulid2.ulid)();
+  const source = args.source ?? "direct";
+  const spawner = args.spawner ?? "node-runner";
+  const emit = async (markdown) => {
+    await args.onMarkdown?.(markdown);
+  };
   const triggerMatch = userText.match(TRIGGER_TAG_RE);
   const triggerType = triggerMatch?.[1] ?? "manual";
   const cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
@@ -16864,89 +17282,100 @@ async function runNode(args) {
     eventId,
     node: node.id,
     trigger: triggerType,
-    detail: { source: "chat", drainedHandoffs: drained.length }
+    detail: { source, drainedHandoffs: drained.length }
   });
-  const systemContent = buildSystemMessage(node, deps.paths.inboxRoot);
-  const userContent = buildUserMessage(node, drained, cleanedUserText, triggerType);
-  const messages = [];
-  messages.push(vscode5.LanguageModelChatMessage.User(systemContent));
-  for (const turn of ctx.history) {
-    if (turn instanceof vscode5.ChatRequestTurn) {
-      messages.push(vscode5.LanguageModelChatMessage.User(turn.prompt));
-    } else if (turn instanceof vscode5.ChatResponseTurn) {
-      const text = chatResponseTurnToText(turn);
-      if (text) messages.push(vscode5.LanguageModelChatMessage.Assistant(text));
-    }
+  for (const handoff of drained) {
+    await deps.ledger.append({
+      type: "handoff.consumed",
+      eventId: handoff.trace.rootId ?? eventId,
+      node: node.id,
+      from: handoff.from,
+      to: handoff.to,
+      handoffId: handoff.id,
+      detail: { edgeId: handoff.edgeId, depth: handoff.trace.depth }
+    });
   }
-  messages.push(vscode5.LanguageModelChatMessage.User(userContent));
+  const agentInstructions = node.agent ? await deps.getAgentInstructions(node.agent) : null;
+  const systemContent = buildSystemMessage(node, deps.paths.inboxRoot, agentInstructions);
+  const userContent = buildUserMessage(node, drained, cleanedUserText, triggerType);
+  const messages = [
+    { role: "user", content: systemContent },
+    ...history,
+    { role: "user", content: userContent }
+  ];
   if (drained.length > 0) {
-    stream.markdown(`*Drained ${drained.length} pending handoff(s) from inbox.*
+    await emit(`*Drained ${drained.length} pending handoff(s) from inbox.*
 
 `);
   }
-  const config = vscode5.workspace.getConfiguration("vscodeAgentOrchestrator");
-  if (config.get("dryRun", false)) {
-    stream.markdown("`dryRun` is enabled \u2014 skipping the model call.");
+  const modelSelector = normalizeModelSelector(node.model);
+  if (args.dryRun) {
+    await emit("`dryRun` is enabled - skipping the model call.");
     await deps.ledger.append({
       type: "session.spawned",
       node: node.id,
       eventId,
       dryRun: true,
+      modelSelector,
       promptLength: systemContent.length + userContent.length
     });
-    return { metadata: { nodeId: node.id, eventId } };
+    return {
+      nodeId: node.id,
+      eventId,
+      assistantText: "",
+      handoffsEmitted: 0,
+      drainedHandoffs: drained.length,
+      fileArtifacts: []
+    };
   }
   let assistantText = "";
+  let model;
   try {
-    const response = await request.model.sendRequest(messages, {}, token);
-    for await (const fragment of response.text) {
+    model = await deps.modelProvider.selectModel(modelSelector);
+    for await (const fragment of model.sendRequest(messages)) {
       assistantText += fragment;
-      stream.markdown(fragment);
+      await emit(fragment);
     }
   } catch (err) {
-    if (err instanceof vscode5.LanguageModelError) {
-      stream.markdown(
-        `
-
-**LanguageModelError:** ${err.code} \u2014 ${err.message}
-
-Check that you've selected a model in the chat picker and that you have access (e.g. GitHub Copilot subscription).`
-      );
-    } else {
-      throw err;
-    }
     await deps.ledger.append({
       type: "session.errored",
       node: node.id,
       eventId,
       error: err instanceof Error ? err.message : String(err)
     });
-    return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
+    throw err;
   }
   await deps.ledger.append({
     type: "session.spawned",
     node: node.id,
     eventId,
-    spawner: "chat-participant",
-    model: request.model.id,
+    spawner,
+    model: model.id,
+    modelVendor: model.vendor,
+    modelFamily: model.family,
+    modelSelector,
     promptLength: systemContent.length + userContent.length,
     responseLength: assistantText.length,
     drainedHandoffs: drained.length
   });
-  const handoffs = parseHandoffs(assistantText);
+  const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
+  const explicitHandoffs = parseHandoffs(assistantText);
+  const graphHandoffs = explicitHandoffs.length > 0 ? [] : buildGraphHandoffs(deps.getWorkflow(), node, assistantText);
+  const handoffs = explicitHandoffs.length > 0 ? explicitHandoffs : graphHandoffs;
   if (handoffs.length > 0) {
-    stream.markdown(`
+    const handoffSourceLabel = explicitHandoffs.length > 0 ? "outgoing" : "graph edge";
+    await emit(`
 
 ---
-*Routing ${handoffs.length} outgoing handoff(s)...*
+*Routing ${handoffs.length} ${handoffSourceLabel} handoff(s)...*
 `);
-    for (const h of handoffs) {
+    for (const handoff of handoffs) {
       const payload = deps.bus.buildPayload({
         from: node.id,
-        to: h.target,
-        edgeId: findEdgeId(deps.getWorkflow(), node.id, h.target),
-        trigger: { type: "spawnedSession", source: "chat-participant" },
-        payload: h.payload,
+        to: handoff.target,
+        edgeId: handoff.edgeId ?? findEdgeId(deps.getWorkflow(), node.id, handoff.target),
+        trigger: { type: handoff.source, source: spawner },
+        payload: handoff.payload,
         rootId: drained[0]?.trace.rootId ?? eventId,
         depth: (drained[0]?.trace.depth ?? 0) + 1,
         parentId: drained[0]?.id
@@ -16956,34 +17385,94 @@ Check that you've selected a model in the chat picker and that you have access (
         type: "handoff.emitted",
         eventId,
         from: node.id,
-        to: h.target,
+        to: handoff.target,
         handoffId: payload.id,
         payloadBytes: JSON.stringify(payload).length,
-        outboxPath
+        outboxPath,
+        detail: { edgeId: payload.edgeId, source: handoff.source }
       });
       await deps.ledger.append({
         type: "handoff.delivered",
         eventId,
-        to: h.target,
+        from: node.id,
+        to: handoff.target,
         handoffId: payload.id,
-        inboxPath
+        inboxPath,
+        detail: { edgeId: payload.edgeId, source: handoff.source }
       });
-      stream.markdown(`  \u2192 \`${h.target}\` (id ${payload.id})
+      await emit(`  -> \`${handoff.target}\` (id ${payload.id})
 `);
     }
   }
-  return { metadata: { nodeId: node.id, eventId, handoffsEmitted: handoffs.length } };
+  return {
+    nodeId: node.id,
+    eventId,
+    assistantText,
+    handoffsEmitted: handoffs.length,
+    drainedHandoffs: drained.length,
+    fileArtifacts
+  };
 }
-function buildSystemMessage(node, inboxRoot) {
+async function writeArtifacts(args) {
+  try {
+    const fileArtifacts = await writeNodeFileArtifacts({
+      node: args.node,
+      workspaceRoot: args.deps.paths.workspaceRoot,
+      assistantText: args.assistantText,
+      drained: args.drained
+    });
+    for (const artifact of fileArtifacts) {
+      await args.deps.ledger.append({
+        type: "file.written",
+        node: args.node.id,
+        eventId: args.eventId,
+        path: artifact.path,
+        bytes: artifact.bytes,
+        mode: artifact.mode,
+        detail: { source: artifact.source }
+      });
+    }
+    if (fileArtifacts.length > 0) {
+      await args.emit(
+        `
+
+---
+*Wrote ${fileArtifacts.length} file artifact(s):*
+${fileArtifacts.map((artifact) => `  -> \`${artifact.path}\``).join("\n")}
+`
+      );
+    }
+    return fileArtifacts;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await args.deps.ledger.append({
+      type: "file.writeFailed",
+      node: args.node.id,
+      eventId: args.eventId,
+      error: message
+    });
+    await args.emit(`
+
+**File write failed:** ${message}
+`);
+    return [];
+  }
+}
+function buildSystemMessage(node, inboxRoot, agentInstructions) {
   const lines = [];
   lines.push(`You are the **${node.label}** node (id: \`${node.id}\`) in a multi-agent VS Code workflow.`);
-  if (node.agent) lines.push(`Agent identifier: \`${node.agent}\` (free-form label).`);
+  if (node.agent) lines.push(`Selected VS Code custom agent: \`${node.agent}\`.`);
   lines.push("");
-  lines.push("**Standing instructions for this node:**");
-  lines.push(node.context.trim() || "(none \u2014 proceed with your best judgment)");
+  if (agentInstructions?.trim()) {
+    lines.push("**Selected agent instructions:**");
+    lines.push(agentInstructions.trim());
+    lines.push("");
+  }
+  lines.push("**Node-specific standing instructions:**");
+  lines.push(node.context.trim() || "(none - proceed with your best judgment)");
   lines.push("");
   lines.push(
-    "**Handoff protocol** \u2014 when you want to hand work to another node in this workflow, emit one or more blocks with this exact format anywhere in your response:"
+    "**Handoff protocol** - when you want to hand work to another node in this workflow, emit one or more blocks with this exact format anywhere in your response:"
   );
   lines.push("");
   lines.push("```");
@@ -17001,8 +17490,18 @@ function buildSystemMessage(node, inboxRoot) {
   lines.push("```");
   lines.push("");
   lines.push(
-    "If your runtime can write files directly (you have a Bash/file tool), writing the file yourself is also accepted \u2014 the orchestrator's FileSystemWatcher picks them up either way."
+    "If your runtime can write files directly (you have a Bash/file tool), writing the file yourself is also accepted - the orchestrator's FileSystemWatcher picks them up either way."
   );
+  lines.push("");
+  lines.push(
+    "**File write protocol** - if your node needs to create or update a file, emit one or more blocks with this exact format. The extension host will write the file after your response:"
+  );
+  lines.push("");
+  lines.push("```");
+  lines.push("<<WRITE_FILE path=relative/or/absolute/path.md>>");
+  lines.push("file contents here");
+  lines.push("<<END_WRITE_FILE>>");
+  lines.push("```");
   return lines.join("\n");
 }
 function buildUserMessage(node, drained, cleanedUserText, triggerType) {
@@ -17013,9 +17512,9 @@ function buildUserMessage(node, drained, cleanedUserText, triggerType) {
   }
   if (drained.length > 0) {
     lines.push(`**Pending handoffs in your inbox** (${drained.length}):`);
-    for (const h of drained) {
+    for (const handoff of drained) {
       lines.push("```json");
-      lines.push(JSON.stringify({ from: h.from, edgeId: h.edgeId, payload: h.payload, trace: h.trace }, null, 2));
+      lines.push(JSON.stringify({ from: handoff.from, edgeId: handoff.edgeId, payload: handoff.payload, trace: handoff.trace }, null, 2));
       lines.push("```");
     }
     lines.push("");
@@ -17028,40 +17527,279 @@ function buildUserMessage(node, drained, cleanedUserText, triggerType) {
   }
   return lines.join("\n");
 }
+function normalizeModelSelector(model) {
+  if (!model) return void 0;
+  const selector = {};
+  if (model.vendor?.trim()) selector.vendor = model.vendor.trim();
+  if (model.family?.trim()) selector.family = model.family.trim();
+  if (model.id?.trim()) selector.id = model.id.trim();
+  if (model.version?.trim()) selector.version = model.version.trim();
+  return Object.keys(selector).length > 0 ? selector : void 0;
+}
+function parseHandoffs(text) {
+  const out = [];
+  let match;
+  HANDOFF_BLOCK_RE.lastIndex = 0;
+  while ((match = HANDOFF_BLOCK_RE.exec(text)) !== null) {
+    const target = match[1];
+    let body = match[2].trim();
+    body = body.replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
+    try {
+      out.push({ target, payload: JSON.parse(body), source: "spawnedSession" });
+    } catch {
+      out.push({ target, payload: { _rawText: body, _parseError: true }, source: "spawnedSession" });
+    }
+  }
+  return out;
+}
+function buildGraphHandoffs(workflow, node, assistantText) {
+  if (!workflow || assistantText.trim().length === 0) return [];
+  const targetsById = new Map(workflow.nodes.map((candidate) => [candidate.id, candidate]));
+  return workflow.edges.filter((edge) => edge.from === node.id).map((edge) => ({ edge, target: targetsById.get(edge.to) })).filter(({ target }) => target?.enabled && target.trigger.type === "handoff").map(({ edge, target }) => ({
+    target: edge.to,
+    edgeId: edge.id,
+    source: "graphEdge",
+    payload: {
+      fromNode: node.id,
+      fromLabel: node.label,
+      toNode: target?.id,
+      toLabel: target?.label,
+      response: assistantText.trim()
+    }
+  }));
+}
+function findEdgeId(workflow, from, to) {
+  if (!workflow) return null;
+  return workflow.edges.find((edge) => edge.from === from && edge.to === to)?.id ?? null;
+}
+
+// src/runtime/chat-participant.ts
+function registerChatParticipant(context, deps) {
+  const handler = async (request, ctx, stream, token) => {
+    try {
+      const command = request.command;
+      const prompt = (request.prompt ?? "").trim();
+      if (command === "list" || !command && prompt === "") {
+        return listNodes(deps, stream);
+      }
+      let rawNodeReference;
+      let userText;
+      if (command === "run" || !command) {
+        const split = prompt.split(/\s+/);
+        rawNodeReference = split[0] ?? "";
+        userText = split.slice(1).join(" ").trim();
+      } else {
+        rawNodeReference = command;
+        userText = prompt;
+      }
+      const workflow = deps.getWorkflow();
+      if (!workflow) {
+        stream.markdown(
+          "No workflow loaded. Open the graph editor with **Agent Orchestrator: Open Graph Editor** first."
+        );
+        return {};
+      }
+      const parsedRun = command === "run" || !command ? parseRunPrompt(workflow, prompt) : null;
+      const nodeReference = parsedRun?.nodeReference ?? rawNodeReference;
+      userText = parsedRun?.userText ?? userText;
+      const resolution = resolveWorkflowNode(workflow, nodeReference);
+      if (resolution.reason === "ambiguous") {
+        stream.markdown(
+          `More than one node matches \`${nodeReference}\`: ${resolution.matches.map((node2) => `\`${formatNodeReference(node2)}\` (${node2.id})`).join(", ")}. Use a more specific label or the node id.`
+        );
+        return {};
+      }
+      const node = resolution.node;
+      if (!node) {
+        const suggestions = nodeSuggestions(workflow);
+        stream.markdown(
+          `No node named \`${nodeReference || "(empty)"}\` in the active workflow.${suggestions ? ` Try ${suggestions}, or run \`@orchestrator /list\`.` : ""}`
+        );
+        return {};
+      }
+      if (!node.enabled) {
+        stream.markdown(`Node \`${formatNodeReference(node)}\` is disabled. Enable it in the graph editor first.`);
+        return {};
+      }
+      return await runNode({ deps, node, request, ctx, stream, token, userText });
+    } catch (err) {
+      stream.markdown(
+        `**Orchestrator error:** ${err instanceof Error ? err.message : String(err)}`
+      );
+      await deps.ledger.append({
+        type: "session.errored",
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
+    }
+  };
+  const participant = vscode6.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
+  participant.iconPath = new vscode6.ThemeIcon("organization");
+  context.subscriptions.push(participant);
+  return participant;
+}
+function listNodes(deps, stream) {
+  const wf = deps.getWorkflow();
+  if (!wf || wf.nodes.length === 0) {
+    stream.markdown("No nodes defined. Open the graph editor and create one.");
+    return {};
+  }
+  stream.markdown(`**Workflow: ${wf.name}** (${wf.nodes.length} nodes)
+
+`);
+  for (const n of wf.nodes) {
+    const trig = n.trigger.type;
+    stream.markdown(
+      `- **${n.label}** \xB7 id: \`${n.id}\`${n.agent ? ` \xB7 agent: \`${n.agent}\`` : ""}${n.enabled ? "" : " *(disabled)*"} \xB7 trigger: \`${trig}\`
+`
+    );
+  }
+  stream.markdown(`
+Run a node with \`@orchestrator /run <label>\`. Node ids still work too.`);
+  return {};
+}
+function parseRunPrompt(workflow, prompt) {
+  const words = prompt.trim().split(/\s+/).filter(Boolean);
+  for (let count = words.length; count > 0; count--) {
+    const candidate = words.slice(0, count).join(" ");
+    if (countExactPromptMatches(workflow, candidate) > 0) {
+      return { nodeReference: candidate, userText: words.slice(count).join(" ").trim() };
+    }
+  }
+  return { nodeReference: words[0] ?? "", userText: words.slice(1).join(" ").trim() };
+}
+function countExactPromptMatches(workflow, reference) {
+  return workflow.nodes.filter(
+    (node) => promptEquals(node.id, reference) || promptEquals(node.label, reference) || (node.agent ? promptEquals(node.agent, reference) : false)
+  ).length;
+}
+function promptEquals(left, right) {
+  return left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0;
+}
+async function runNode(args) {
+  const { deps, node, request, ctx, stream, token, userText } = args;
+  const config = vscode6.workspace.getConfiguration("vscodeAgentOrchestrator");
+  try {
+    const result = await runWorkflowNode({
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token) },
+      node,
+      userText,
+      history: chatHistoryToRuntimeMessages(ctx),
+      dryRun: config.get("dryRun", false),
+      source: "chat",
+      spawner: "chat-participant",
+      onMarkdown: (markdown) => stream.markdown(markdown)
+    });
+    return { metadata: { nodeId: result.nodeId, eventId: result.eventId, handoffsEmitted: result.handoffsEmitted } };
+  } catch (err) {
+    if (err instanceof vscode6.LanguageModelError) {
+      stream.markdown(
+        `
+
+**LanguageModelError:** ${err.code} \u2014 ${err.message}
+
+Check that you've selected a model in the chat picker and that you have access (e.g. GitHub Copilot subscription).`
+      );
+      return { errorDetails: { message: err.message } };
+    } else {
+      throw err;
+    }
+  }
+}
+function chatHistoryToRuntimeMessages(ctx) {
+  const messages = [];
+  for (const turn of ctx.history) {
+    if (turn instanceof vscode6.ChatRequestTurn) {
+      messages.push({ role: "user", content: turn.prompt });
+    } else if (turn instanceof vscode6.ChatResponseTurn) {
+      const text = chatResponseTurnToText(turn);
+      if (text) messages.push({ role: "assistant", content: text });
+    }
+  }
+  return messages;
+}
+function createVsCodeModelProvider(request, stream, token) {
+  return {
+    async selectModel(selector) {
+      const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      return {
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family,
+        async *sendRequest(messages) {
+          const response = await model.sendRequest(messages.map(toVsCodeMessage), {}, token);
+          for await (const fragment of response.text) {
+            yield fragment;
+          }
+        }
+      };
+    }
+  };
+}
+function toVsCodeMessage(message) {
+  return message.role === "assistant" ? vscode6.LanguageModelChatMessage.Assistant(message.content) : vscode6.LanguageModelChatMessage.User(message.content);
+}
 function chatResponseTurnToText(turn) {
   const parts = [];
   for (const r of turn.response) {
-    if (r instanceof vscode5.ChatResponseMarkdownPart) {
+    if (r instanceof vscode6.ChatResponseMarkdownPart) {
       parts.push(typeof r.value === "string" ? r.value : r.value.value);
     }
   }
   return parts.join("");
 }
-function parseHandoffs(text) {
-  const out = [];
-  let m;
-  HANDOFF_BLOCK_RE.lastIndex = 0;
-  while ((m = HANDOFF_BLOCK_RE.exec(text)) !== null) {
-    const target = m[1];
-    let body = m[2].trim();
-    body = body.replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
-    try {
-      out.push({ target, payload: JSON.parse(body) });
-    } catch {
-      out.push({ target, payload: { _rawText: body, _parseError: true } });
-    }
-  }
-  return out;
+function toLanguageModelSelector(model) {
+  if (!model) return void 0;
+  const selector = {};
+  if (model.vendor?.trim()) selector.vendor = model.vendor.trim();
+  if (model.family?.trim()) selector.family = model.family.trim();
+  if (model.id?.trim()) selector.id = model.id.trim();
+  if (model.version?.trim()) selector.version = model.version.trim();
+  return Object.keys(selector).length > 0 ? selector : void 0;
 }
-function findEdgeId(workflow, from, to) {
-  if (!workflow) return null;
-  return workflow.edges.find((e) => e.from === from && e.to === to)?.id ?? null;
+async function selectModel(selector, fallback, stream) {
+  if (!selector) return fallback;
+  try {
+    const models = await vscode6.lm.selectChatModels(selector);
+    if (models.length === 0) {
+      stream.markdown(
+        `*No chat model matched ${formatModelSelector(selector)}. Using the currently selected model (${fallback.name}).*
+
+`
+      );
+      return fallback;
+    }
+    const selected = models[0];
+    if (selected.id !== fallback.id) {
+      stream.markdown(`*Using node model ${selected.name} (${selected.id}).*
+
+`);
+    }
+    return selected;
+  } catch (err) {
+    stream.markdown(
+      `*Could not select node model ${formatModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*
+
+`
+    );
+    return fallback;
+  }
+}
+function formatModelSelector(selector) {
+  const parts = [
+    selector.vendor ? `vendor=${selector.vendor}` : "",
+    selector.family ? `family=${selector.family}` : "",
+    selector.id ? `id=${selector.id}` : "",
+    selector.version ? `version=${selector.version}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "the empty selector";
 }
 
 // src/webview/panel.ts
-var vscode6 = __toESM(require("vscode"));
-var fs7 = __toESM(require("fs"));
-var path8 = __toESM(require("path"));
+var vscode7 = __toESM(require("vscode"));
+var fs9 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
 var GraphPanelManager = class {
   constructor(context, deps) {
     this.context = context;
@@ -17071,17 +17809,17 @@ var GraphPanelManager = class {
   disposeListeners = [];
   open() {
     if (this.current) {
-      this.current.reveal(vscode6.ViewColumn.Active);
+      this.current.reveal(vscode7.ViewColumn.Active);
       return;
     }
-    const panel = vscode6.window.createWebviewPanel(
-      "claudeOrchestratorGraph",
-      "Claude Orchestrator",
-      vscode6.ViewColumn.Active,
+    const panel = vscode7.window.createWebviewPanel(
+      "agentOrchestratorGraph",
+      "Agent Orchestrator",
+      vscode7.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode6.Uri.file(path8.join(this.context.extensionPath, "dist"))]
+        localResourceRoots: [vscode7.Uri.file(path11.join(this.context.extensionPath, "dist"))]
       }
     );
     this.current = panel;
@@ -17115,6 +17853,8 @@ var GraphPanelManager = class {
         this.post(panel, { type: "workflow.loaded", workflow });
         const agents = await this.deps.listAgents();
         this.post(panel, { type: "agents.list", agents });
+        const models = await this.deps.listModels();
+        this.post(panel, { type: "models.list", models });
         const tail = await this.deps.tailLedger();
         for (const entry of tail.slice(-50)) {
           this.post(panel, { type: "ledger.append", entry });
@@ -17131,9 +17871,45 @@ var GraphPanelManager = class {
         this.post(panel, { type: "agents.list", agents });
         return;
       }
+      case "models.requestList": {
+        const models = await this.deps.listModels();
+        this.post(panel, { type: "models.list", models });
+        return;
+      }
       case "node.run": {
+        if (msg.workflow) {
+          const saveResult = await this.deps.saveWorkflow(msg.workflow);
+          if (!saveResult.ok) {
+            this.post(panel, {
+              type: "node.runResult",
+              nodeId: msg.nodeId,
+              ok: false,
+              error: saveResult.error
+            });
+            return;
+          }
+          this.post(panel, { type: "workflow.saved", ok: true });
+        }
         const r = await this.deps.runNode(msg.nodeId);
         this.post(panel, { type: "node.runResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
+        return;
+      }
+      case "trigger.test": {
+        if (msg.workflow) {
+          const saveResult = await this.deps.saveWorkflow(msg.workflow);
+          if (!saveResult.ok) {
+            this.post(panel, {
+              type: "trigger.testResult",
+              nodeId: msg.nodeId,
+              ok: false,
+              error: saveResult.error
+            });
+            return;
+          }
+          this.post(panel, { type: "workflow.saved", ok: true });
+        }
+        const r = await this.deps.testTrigger(msg.nodeId);
+        this.post(panel, { type: "trigger.testResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
         return;
       }
       case "ledger.tail": {
@@ -17149,10 +17925,10 @@ var GraphPanelManager = class {
     void panel.webview.postMessage(msg);
   }
   renderHtml(webview) {
-    const distRoot = vscode6.Uri.file(path8.join(this.context.extensionPath, "dist"));
-    const scriptUri = webview.asWebviewUri(vscode6.Uri.joinPath(distRoot, "webview.js"));
-    const cssPath = path8.join(this.context.extensionPath, "dist", "webview.css");
-    const cssTag = fs7.existsSync(cssPath) ? `<link rel="stylesheet" href="${webview.asWebviewUri(vscode6.Uri.joinPath(distRoot, "webview.css"))}">` : "";
+    const distRoot = vscode7.Uri.file(path11.join(this.context.extensionPath, "dist"));
+    const scriptUri = webview.asWebviewUri(vscode7.Uri.joinPath(distRoot, "webview.js"));
+    const cssPath = path11.join(this.context.extensionPath, "dist", "webview.css");
+    const cssTag = fs9.existsSync(cssPath) ? `<link rel="stylesheet" href="${webview.asWebviewUri(vscode7.Uri.joinPath(distRoot, "webview.css"))}">` : "";
     const nonce = randomNonce();
     const csp = [
       `default-src 'none';`,
@@ -17166,7 +17942,7 @@ var GraphPanelManager = class {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
-<title>Claude Orchestrator</title>
+<title>Agent Orchestrator</title>
 ${cssTag}
 <style>
   html, body, #root { height: 100%; margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-foreground); font-family: var(--vscode-font-family); }
@@ -17188,7 +17964,7 @@ function randomNonce() {
 
 // src/extension.ts
 async function activate(context) {
-  const output = vscode7.window.createOutputChannel("Agent Orchestrator");
+  const output = vscode8.window.createOutputChannel("Agent Orchestrator");
   context.subscriptions.push(output);
   output.appendLine("Agent Orchestrator activating...");
   const root = workspaceRoot();
@@ -17210,7 +17986,8 @@ async function activate(context) {
       paths: p,
       bus,
       ledger,
-      getWorkflow: () => store.get()
+      getWorkflow: () => store.get(),
+      getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null
     });
     output.appendLine("Chat participant @orchestrator registered.");
   } else {
@@ -17235,15 +18012,82 @@ async function activate(context) {
     },
     listAgents: async () => {
       const agents = await listAgents(root);
-      return agents.map((a) => ({ id: a.id, label: a.label, path: a.path }));
+      return agents.map((a) => ({
+        id: a.id,
+        label: a.label,
+        path: a.path,
+        source: a.source,
+        description: a.description,
+        defaultModel: a.defaultModel
+      }));
     },
+    listModels: async () => {
+      const models = await vscode8.lm.selectChatModels();
+      return models.map((model) => ({
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family,
+        version: model.version,
+        maxInputTokens: model.maxInputTokens
+      }));
+    },
+    getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null,
     runNode: async (nodeId) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };
       const wf = store.get();
-      const node = wf?.nodes.find((n) => n.id === nodeId);
-      if (!node) return { ok: false, error: `No node with id ${nodeId}` };
+      const resolution = resolveWorkflowNode(wf, nodeId);
+      if (resolution.reason === "ambiguous") {
+        return { ok: false, error: `More than one node matches ${nodeId}. Use the node id.` };
+      }
+      const node = resolution.node;
+      if (!node) return { ok: false, error: `No node named ${nodeId}` };
       try {
         await dispatcher.fireNode(node, { reason: "manual" });
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
+    testTrigger: async (nodeId) => {
+      if (!store || !dispatcher || !bus || !ledger) return { ok: false, error: "Not initialized." };
+      const wf = store.get();
+      const resolution = resolveWorkflowNode(wf, nodeId);
+      if (resolution.reason === "ambiguous") {
+        return { ok: false, error: `More than one node matches ${nodeId}. Use the node id.` };
+      }
+      const node = resolution.node;
+      if (!node) return { ok: false, error: `No node named ${nodeId}` };
+      try {
+        if (node.trigger.type === "handoff") {
+          const payload = bus.buildPayload({
+            from: "validation",
+            to: node.id,
+            edgeId: null,
+            trigger: { type: "validation" },
+            payload: {
+              validation: true,
+              message: `Synthetic validation handoff for ${node.label}`,
+              nodeId: node.id
+            }
+          });
+          const { inboxPath, outboxPath } = await bus.deliver(payload);
+          await ledger.append({
+            type: "handoff.delivered",
+            eventId: payload.trace.rootId,
+            from: "validation",
+            to: node.id,
+            handoffId: payload.id,
+            inboxPath,
+            outboxPath,
+            detail: { validation: true }
+          });
+          return { ok: true };
+        }
+        await dispatcher.fireNode(node, {
+          reason: node.trigger.type,
+          triggerDetail: { validation: 1 }
+        });
         return { ok: true };
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -17253,20 +18097,20 @@ async function activate(context) {
     onLedgerEntry: (cb) => ledger ? ledger.onAppend(cb) : () => void 0
   });
   context.subscriptions.push(
-    vscode7.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
+    vscode8.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
       panel.open();
     }),
-    vscode7.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
+    vscode8.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
       if (!store || !dispatcher) {
-        vscode7.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
+        vscode8.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
         return;
       }
       const wf = store.get();
       if (!wf || wf.nodes.length === 0) {
-        vscode7.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
+        vscode8.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
         return;
       }
-      const choice = await vscode7.window.showQuickPick(
+      const choice = await vscode8.window.showQuickPick(
         wf.nodes.map((n) => ({ label: n.label, description: n.id, node: n })),
         { placeHolder: "Pick a node to fire" }
       );
@@ -17274,18 +18118,18 @@ async function activate(context) {
       try {
         await dispatcher.fireNode(choice.node, { reason: "manual" });
       } catch (err) {
-        vscode7.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
+        vscode8.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
       }
     }),
-    vscode7.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
+    vscode8.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
       if (!p) return;
-      const doc = await vscode7.workspace.openTextDocument(vscode7.Uri.file(p.ledgerJsonl));
-      await vscode7.window.showTextDocument(doc, { preview: false });
+      const doc = await vscode8.workspace.openTextDocument(vscode8.Uri.file(p.ledgerJsonl));
+      await vscode8.window.showTextDocument(doc, { preview: false });
     }),
-    vscode7.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
+    vscode8.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
       triggers?.disposeAll();
-      await vscode7.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode7.ConfigurationTarget.Workspace);
-      vscode7.window.showWarningMessage(
+      await vscode8.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode8.ConfigurationTarget.Workspace);
+      vscode8.window.showWarningMessage(
         "Agent Orchestrator: all triggers stopped and disabled. Re-enable in settings."
       );
     })

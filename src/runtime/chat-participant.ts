@@ -1,18 +1,17 @@
 import * as vscode from "vscode";
-import { ulid } from "ulid";
-import type { Workflow, WorkflowNode, HandoffPayload } from "../../shared/types.js";
+import type { ModelSelector, Workflow, WorkflowNode } from "../../shared/types.js";
 import type { Ledger } from "../orchestration/ledger.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
-
-const TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
-const HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
+import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../orchestration/node-resolver.js";
+import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
   bus: MessageBus;
   ledger: Ledger;
   getWorkflow: () => Workflow | null;
+  getAgentInstructions: (agentId: string) => Promise<string | null>;
 }
 
 /**
@@ -23,13 +22,13 @@ export interface ChatParticipantDeps {
  * Conventions:
  *   @orchestrator /list
  *     → lists nodes in the active workflow.
- *   @orchestrator /run <node-id> [extra prompt text]
- *     → drains <node-id>'s inbox, calls request.model.sendRequest with the
+ *   @orchestrator /run <node-label-or-id> [extra prompt text]
+ *     → drains the node's inbox, calls request.model.sendRequest with the
  *        node's `context` as the system message, streams the response back to
  *        the chat, then parses any <<HANDOFF target=X>>{...}<<END>> blocks and
  *        routes them to target inboxes (which fires that node's handoff
  *        trigger and the chain continues).
- *   @orchestrator <node-id> ...
+ *   @orchestrator <node-label-or-id> ...
  *     → equivalent to /run <node-id> ... (slash command optional).
  */
 export function registerChatParticipant(
@@ -45,15 +44,15 @@ export function registerChatParticipant(
         return listNodes(deps, stream);
       }
 
-      // Both `/run sec ...` and `sec ...` work.
-      let nodeId: string;
+      // Both `/run Security ...` and `Security ...` work.
+      let rawNodeReference: string;
       let userText: string;
       if (command === "run" || !command) {
         const split = prompt.split(/\s+/);
-        nodeId = split[0] ?? "";
+        rawNodeReference = split[0] ?? "";
         userText = split.slice(1).join(" ").trim();
       } else {
-        nodeId = command;
+        rawNodeReference = command;
         userText = prompt;
       }
 
@@ -64,15 +63,30 @@ export function registerChatParticipant(
         );
         return {};
       }
-      const node = workflow.nodes.find((n) => n.id === nodeId);
-      if (!node) {
+      const parsedRun = command === "run" || !command ? parseRunPrompt(workflow, prompt) : null;
+      const nodeReference = parsedRun?.nodeReference ?? rawNodeReference;
+      userText = parsedRun?.userText ?? userText;
+      const resolution = resolveWorkflowNode(workflow, nodeReference);
+      if (resolution.reason === "ambiguous") {
         stream.markdown(
-          `No node with id \`${nodeId || "(empty)"}\` in the active workflow. Try \`@orchestrator /list\`.`
+          `More than one node matches \`${nodeReference}\`: ${resolution.matches
+            .map((node) => `\`${formatNodeReference(node)}\` (${node.id})`)
+            .join(", ")}. Use a more specific label or the node id.`
+        );
+        return {};
+      }
+      const node = resolution.node;
+      if (!node) {
+        const suggestions = nodeSuggestions(workflow);
+        stream.markdown(
+          `No node named \`${nodeReference || "(empty)"}\` in the active workflow.${
+            suggestions ? ` Try ${suggestions}, or run \`@orchestrator /list\`.` : ""
+          }`
         );
         return {};
       }
       if (!node.enabled) {
-        stream.markdown(`Node \`${nodeId}\` is disabled. Enable it in the graph editor first.`);
+        stream.markdown(`Node \`${formatNodeReference(node)}\` is disabled. Enable it in the graph editor first.`);
         return {};
       }
 
@@ -105,11 +119,37 @@ function listNodes(deps: ChatParticipantDeps, stream: vscode.ChatResponseStream)
   for (const n of wf.nodes) {
     const trig = n.trigger.type;
     stream.markdown(
-      `- **\`${n.id}\`** — ${n.label}${n.enabled ? "" : " *(disabled)*"} · trigger: \`${trig}\`\n`
+      `- **${n.label}** · id: \`${n.id}\`${n.agent ? ` · agent: \`${n.agent}\`` : ""}${
+        n.enabled ? "" : " *(disabled)*"
+      } · trigger: \`${trig}\`\n`
     );
   }
-  stream.markdown(`\nRun a node with \`@orchestrator /run <id>\`.`);
+  stream.markdown(`\nRun a node with \`@orchestrator /run <label>\`. Node ids still work too.`);
   return {};
+}
+
+function parseRunPrompt(workflow: Workflow, prompt: string): { nodeReference: string; userText: string } {
+  const words = prompt.trim().split(/\s+/).filter(Boolean);
+  for (let count = words.length; count > 0; count--) {
+    const candidate = words.slice(0, count).join(" ");
+    if (countExactPromptMatches(workflow, candidate) > 0) {
+      return { nodeReference: candidate, userText: words.slice(count).join(" ").trim() };
+    }
+  }
+  return { nodeReference: words[0] ?? "", userText: words.slice(1).join(" ").trim() };
+}
+
+function countExactPromptMatches(workflow: Workflow, reference: string): number {
+  return workflow.nodes.filter(
+    (node) =>
+      promptEquals(node.id, reference) ||
+      promptEquals(node.label, reference) ||
+      (node.agent ? promptEquals(node.agent, reference) : false)
+  ).length;
+}
+
+function promptEquals(left: string, right: string): boolean {
+  return left.localeCompare(right, undefined, { sensitivity: "accent" }) === 0;
 }
 
 interface RunArgs {
@@ -124,191 +164,72 @@ interface RunArgs {
 
 async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const { deps, node, request, ctx, stream, token, userText } = args;
-  const eventId = ulid();
-
-  const triggerMatch = userText.match(TRIGGER_TAG_RE);
-  const triggerType = triggerMatch?.[1] ?? "manual";
-  const cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
-
-  const drained = await deps.bus.drain(node.id);
-
-  await deps.ledger.append({
-    type: "trigger.fired",
-    eventId,
-    node: node.id,
-    trigger: triggerType as never,
-    detail: { source: "chat", drainedHandoffs: drained.length }
-  });
-
-  // System message: persona definition. VS Code's stable LM API doesn't expose
-  // a System role — convention is to put it as the first User message.
-  const systemContent = buildSystemMessage(node, deps.paths.inboxRoot);
-  const userContent = buildUserMessage(node, drained, cleanedUserText, triggerType);
-
-  const messages: vscode.LanguageModelChatMessage[] = [];
-  messages.push(vscode.LanguageModelChatMessage.User(systemContent));
-
-  // Replay prior turns in this thread so multi-turn within one chat works.
-  for (const turn of ctx.history) {
-    if (turn instanceof vscode.ChatRequestTurn) {
-      messages.push(vscode.LanguageModelChatMessage.User(turn.prompt));
-    } else if (turn instanceof vscode.ChatResponseTurn) {
-      const text = chatResponseTurnToText(turn);
-      if (text) messages.push(vscode.LanguageModelChatMessage.Assistant(text));
-    }
-  }
-  messages.push(vscode.LanguageModelChatMessage.User(userContent));
-
-  if (drained.length > 0) {
-    stream.markdown(`*Drained ${drained.length} pending handoff(s) from inbox.*\n\n`);
-  }
-
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
-  if (config.get<boolean>("dryRun", false)) {
-    stream.markdown("`dryRun` is enabled — skipping the model call.");
-    await deps.ledger.append({
-      type: "session.spawned",
-      node: node.id,
-      eventId,
-      dryRun: true,
-      promptLength: systemContent.length + userContent.length
-    });
-    return { metadata: { nodeId: node.id, eventId } };
-  }
-
-  let assistantText = "";
   try {
-    const response = await request.model.sendRequest(messages, {}, token);
-    for await (const fragment of response.text) {
-      assistantText += fragment;
-      stream.markdown(fragment);
-    }
+    const result = await runWorkflowNode({
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token) },
+      node,
+      userText,
+      history: chatHistoryToRuntimeMessages(ctx),
+      dryRun: config.get<boolean>("dryRun", false),
+      source: "chat",
+      spawner: "chat-participant",
+      onMarkdown: (markdown) => stream.markdown(markdown)
+    });
+    return { metadata: { nodeId: result.nodeId, eventId: result.eventId, handoffsEmitted: result.handoffsEmitted } };
   } catch (err) {
     if (err instanceof vscode.LanguageModelError) {
       stream.markdown(
         `\n\n**LanguageModelError:** ${err.code} — ${err.message}\n\nCheck that you've selected a model in the chat picker and that you have access (e.g. GitHub Copilot subscription).`
       );
+      return { errorDetails: { message: err.message } };
     } else {
       throw err;
     }
-    await deps.ledger.append({
-      type: "session.errored",
-      node: node.id,
-      eventId,
-      error: err instanceof Error ? err.message : String(err)
-    });
-    return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
   }
-
-  await deps.ledger.append({
-    type: "session.spawned",
-    node: node.id,
-    eventId,
-    spawner: "chat-participant",
-    model: request.model.id,
-    promptLength: systemContent.length + userContent.length,
-    responseLength: assistantText.length,
-    drainedHandoffs: drained.length
-  });
-
-  // Parse outgoing handoffs and route them.
-  const handoffs = parseHandoffs(assistantText);
-  if (handoffs.length > 0) {
-    stream.markdown(`\n\n---\n*Routing ${handoffs.length} outgoing handoff(s)...*\n`);
-    for (const h of handoffs) {
-      const payload = deps.bus.buildPayload({
-        from: node.id,
-        to: h.target,
-        edgeId: findEdgeId(deps.getWorkflow(), node.id, h.target),
-        trigger: { type: "spawnedSession", source: "chat-participant" },
-        payload: h.payload,
-        rootId: drained[0]?.trace.rootId ?? eventId,
-        depth: (drained[0]?.trace.depth ?? 0) + 1,
-        parentId: drained[0]?.id
-      });
-      const { inboxPath, outboxPath } = await deps.bus.deliver(payload);
-      await deps.ledger.append({
-        type: "handoff.emitted",
-        eventId,
-        from: node.id,
-        to: h.target,
-        handoffId: payload.id,
-        payloadBytes: JSON.stringify(payload).length,
-        outboxPath
-      });
-      await deps.ledger.append({
-        type: "handoff.delivered",
-        eventId,
-        to: h.target,
-        handoffId: payload.id,
-        inboxPath
-      });
-      stream.markdown(`  → \`${h.target}\` (id ${payload.id})\n`);
-    }
-  }
-
-  return { metadata: { nodeId: node.id, eventId, handoffsEmitted: handoffs.length } };
 }
 
-function buildSystemMessage(node: WorkflowNode, inboxRoot: string): string {
-  const lines: string[] = [];
-  lines.push(`You are the **${node.label}** node (id: \`${node.id}\`) in a multi-agent VS Code workflow.`);
-  if (node.agent) lines.push(`Agent identifier: \`${node.agent}\` (free-form label).`);
-  lines.push("");
-  lines.push("**Standing instructions for this node:**");
-  lines.push(node.context.trim() || "(none — proceed with your best judgment)");
-  lines.push("");
-  lines.push(
-    "**Handoff protocol** — when you want to hand work to another node in this workflow, emit one or more blocks with this exact format anywhere in your response:"
-  );
-  lines.push("");
-  lines.push("```");
-  lines.push("<<HANDOFF target=NODE_ID>>");
-  lines.push('{ "any": "json", "payload": "here" }');
-  lines.push("<<END>>");
-  lines.push("```");
-  lines.push("");
-  lines.push(
-    "The orchestrator parses these from your final reply and writes JSON files to that node's inbox at:"
-  );
-  lines.push("");
-  lines.push("```");
-  lines.push(`${inboxRoot.replace(/\\/g, "/")}/<TARGET_NODE_ID>/<timestamp>_<id>.json`);
-  lines.push("```");
-  lines.push("");
-  lines.push(
-    "If your runtime can write files directly (you have a Bash/file tool), writing the file yourself is also accepted — the orchestrator's FileSystemWatcher picks them up either way."
-  );
-  return lines.join("\n");
+function chatHistoryToRuntimeMessages(ctx: vscode.ChatContext): RuntimeChatMessage[] {
+  const messages: RuntimeChatMessage[] = [];
+  for (const turn of ctx.history) {
+    if (turn instanceof vscode.ChatRequestTurn) {
+      messages.push({ role: "user", content: turn.prompt });
+    } else if (turn instanceof vscode.ChatResponseTurn) {
+      const text = chatResponseTurnToText(turn);
+      if (text) messages.push({ role: "assistant", content: text });
+    }
+  }
+  return messages;
 }
 
-function buildUserMessage(
-  node: WorkflowNode,
-  drained: HandoffPayload[],
-  cleanedUserText: string,
-  triggerType: string
-): string {
-  const lines: string[] = [];
-  if (triggerType !== "manual") {
-    lines.push(`(Triggered by: \`${triggerType}\`.)`);
-    lines.push("");
-  }
-  if (drained.length > 0) {
-    lines.push(`**Pending handoffs in your inbox** (${drained.length}):`);
-    for (const h of drained) {
-      lines.push("```json");
-      lines.push(JSON.stringify({ from: h.from, edgeId: h.edgeId, payload: h.payload, trace: h.trace }, null, 2));
-      lines.push("```");
+function createVsCodeModelProvider(
+  request: vscode.ChatRequest,
+  stream: vscode.ChatResponseStream,
+  token: vscode.CancellationToken
+): RuntimeModelProvider {
+  return {
+    async selectModel(selector: ModelSelector | undefined) {
+      const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      return {
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family,
+        async *sendRequest(messages: RuntimeChatMessage[]) {
+          const response = await model.sendRequest(messages.map(toVsCodeMessage), {}, token);
+          for await (const fragment of response.text) {
+            yield fragment;
+          }
+        }
+      };
     }
-    lines.push("");
-  }
-  if (cleanedUserText) {
-    lines.push("**User message:**");
-    lines.push(cleanedUserText);
-  } else if (drained.length === 0) {
-    lines.push(`Run your standing instructions for the **${node.label}** node now.`);
-  }
-  return lines.join("\n");
+  };
+}
+
+function toVsCodeMessage(message: RuntimeChatMessage): vscode.LanguageModelChatMessage {
+  return message.role === "assistant"
+    ? vscode.LanguageModelChatMessage.Assistant(message.content)
+    : vscode.LanguageModelChatMessage.User(message.content);
 }
 
 function chatResponseTurnToText(turn: vscode.ChatResponseTurn): string {
@@ -321,24 +242,49 @@ function chatResponseTurnToText(turn: vscode.ChatResponseTurn): string {
   return parts.join("");
 }
 
-function parseHandoffs(text: string): Array<{ target: string; payload: Record<string, unknown> }> {
-  const out: Array<{ target: string; payload: Record<string, unknown> }> = [];
-  let m: RegExpExecArray | null;
-  HANDOFF_BLOCK_RE.lastIndex = 0;
-  while ((m = HANDOFF_BLOCK_RE.exec(text)) !== null) {
-    const target = m[1];
-    let body = m[2].trim();
-    body = body.replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
-    try {
-      out.push({ target, payload: JSON.parse(body) });
-    } catch {
-      out.push({ target, payload: { _rawText: body, _parseError: true } });
-    }
-  }
-  return out;
+function toLanguageModelSelector(model: ModelSelector | null | undefined): vscode.LanguageModelChatSelector | undefined {
+  if (!model) return undefined;
+  const selector: vscode.LanguageModelChatSelector = {};
+  if (model.vendor?.trim()) selector.vendor = model.vendor.trim();
+  if (model.family?.trim()) selector.family = model.family.trim();
+  if (model.id?.trim()) selector.id = model.id.trim();
+  if (model.version?.trim()) selector.version = model.version.trim();
+  return Object.keys(selector).length > 0 ? selector : undefined;
 }
 
-function findEdgeId(workflow: Workflow | null, from: string, to: string): string | null {
-  if (!workflow) return null;
-  return workflow.edges.find((e) => e.from === from && e.to === to)?.id ?? null;
+async function selectModel(
+  selector: vscode.LanguageModelChatSelector | undefined,
+  fallback: vscode.LanguageModelChat,
+  stream: vscode.ChatResponseStream
+): Promise<vscode.LanguageModelChat> {
+  if (!selector) return fallback;
+  try {
+    const models = await vscode.lm.selectChatModels(selector);
+    if (models.length === 0) {
+      stream.markdown(
+        `*No chat model matched ${formatModelSelector(selector)}. Using the currently selected model (${fallback.name}).*\n\n`
+      );
+      return fallback;
+    }
+    const selected = models[0];
+    if (selected.id !== fallback.id) {
+      stream.markdown(`*Using node model ${selected.name} (${selected.id}).*\n\n`);
+    }
+    return selected;
+  } catch (err) {
+    stream.markdown(
+      `*Could not select node model ${formatModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*\n\n`
+    );
+    return fallback;
+  }
+}
+
+function formatModelSelector(selector: vscode.LanguageModelChatSelector): string {
+  const parts = [
+    selector.vendor ? `vendor=${selector.vendor}` : "",
+    selector.family ? `family=${selector.family}` : "",
+    selector.id ? `id=${selector.id}` : "",
+    selector.version ? `version=${selector.version}` : ""
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : "the empty selector";
 }

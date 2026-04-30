@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "test/**/*.ts",
+    "shared/**/*.ts",
+    "src/orchestration/**/*.ts",
+    "src/headless/**/*.ts",
+    "src/runtime/file-artifacts.ts",
+    "src/runtime/node-runner.ts"
+  ],
+  "exclude": ["node_modules", "dist", "webview"]
+}

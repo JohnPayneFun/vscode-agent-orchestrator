@@ -1,6 +1,10 @@
 .vscode/**
 .vscode-test/**
+.tmp-tests/**
+.agent-orchestrator/**
+test/**
 src/**
+webview/**
 webview/src/**
 **/*.ts
 **/*.tsx

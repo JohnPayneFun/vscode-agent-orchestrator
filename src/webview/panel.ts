@@ -5,14 +5,19 @@ import type {
   WebviewToExt,
   ExtToWebview,
   Workflow,
-  LedgerEntry
+  LedgerEntry,
+  AgentOption,
+  ModelOption
 } from "../../shared/types.js";
 
 export interface PanelDeps {
   loadWorkflow: () => Promise<Workflow>;
   saveWorkflow: (w: Workflow) => Promise<{ ok: boolean; error?: string }>;
-  listAgents: () => Promise<Array<{ id: string; label: string; path: string }>>;
+  listAgents: () => Promise<AgentOption[]>;
+  listModels: () => Promise<ModelOption[]>;
+  getAgentInstructions: (agentId: string) => Promise<string | null>;
   runNode: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
+  testTrigger: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   tailLedger: () => Promise<LedgerEntry[]>;
   onLedgerEntry: (cb: (e: LedgerEntry) => void) => () => void;
 }
@@ -32,8 +37,8 @@ export class GraphPanelManager {
       return;
     }
     const panel = vscode.window.createWebviewPanel(
-      "claudeOrchestratorGraph",
-      "Claude Orchestrator",
+      "agentOrchestratorGraph",
+      "Agent Orchestrator",
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -77,6 +82,8 @@ export class GraphPanelManager {
         this.post(panel, { type: "workflow.loaded", workflow });
         const agents = await this.deps.listAgents();
         this.post(panel, { type: "agents.list", agents });
+        const models = await this.deps.listModels();
+        this.post(panel, { type: "models.list", models });
         const tail = await this.deps.tailLedger();
         for (const entry of tail.slice(-50)) {
           this.post(panel, { type: "ledger.append", entry });
@@ -93,9 +100,45 @@ export class GraphPanelManager {
         this.post(panel, { type: "agents.list", agents });
         return;
       }
+      case "models.requestList": {
+        const models = await this.deps.listModels();
+        this.post(panel, { type: "models.list", models });
+        return;
+      }
       case "node.run": {
+        if (msg.workflow) {
+          const saveResult = await this.deps.saveWorkflow(msg.workflow);
+          if (!saveResult.ok) {
+            this.post(panel, {
+              type: "node.runResult",
+              nodeId: msg.nodeId,
+              ok: false,
+              error: saveResult.error
+            });
+            return;
+          }
+          this.post(panel, { type: "workflow.saved", ok: true });
+        }
         const r = await this.deps.runNode(msg.nodeId);
         this.post(panel, { type: "node.runResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
+        return;
+      }
+      case "trigger.test": {
+        if (msg.workflow) {
+          const saveResult = await this.deps.saveWorkflow(msg.workflow);
+          if (!saveResult.ok) {
+            this.post(panel, {
+              type: "trigger.testResult",
+              nodeId: msg.nodeId,
+              ok: false,
+              error: saveResult.error
+            });
+            return;
+          }
+          this.post(panel, { type: "workflow.saved", ok: true });
+        }
+        const r = await this.deps.testTrigger(msg.nodeId);
+        this.post(panel, { type: "trigger.testResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
         return;
       }
       case "ledger.tail": {
@@ -132,7 +175,7 @@ export class GraphPanelManager {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
-<title>Claude Orchestrator</title>
+<title>Agent Orchestrator</title>
 ${cssTag}
 <style>
   html, body, #root { height: 100%; margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-foreground); font-family: var(--vscode-font-family); }

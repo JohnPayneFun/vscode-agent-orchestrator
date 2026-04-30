@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as path from "path";
+import * as fs from "fs";
 import type { WorkflowNode } from "../../../shared/types.js";
 import type { OrchestrationPaths } from "../../orchestration/paths.js";
 import { inboxDir } from "../../orchestration/paths.js";
@@ -21,11 +22,15 @@ export class HandoffTrigger implements Trigger {
 
   start(): void {
     const dir = inboxDir(this.p, this.node.id);
+    fs.mkdirSync(dir, { recursive: true });
     // VS Code's FileSystemWatcher accepts a RelativePattern relative to a folder
     // — point it at the inbox dir and watch all .json children.
     const pattern = new vscode.RelativePattern(vscode.Uri.file(dir), "*.json");
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern, false, true, true);
     this.watcher.onDidCreate((uri) => this.onFile(uri.fsPath));
+    for (const fileName of fs.readdirSync(dir)) {
+      if (fileName.endsWith(".json")) this.onFile(path.join(dir, fileName));
+    }
   }
 
   dispose(): void {

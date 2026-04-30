@@ -6,6 +6,10 @@
   "publisher": "jpc-local",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JohnPayneFun/vscode-agent-orchestrator.git"
+  },
   "engines": {
     "vscode": "^1.94.0"
   },
@@ -23,17 +27,30 @@
   ],
   "activationEvents": [
     "onChatParticipant:vscode-agent-orchestrator.main",
-    "onCommand:vscodeAgentOrchestrator.openGraph",
-    "onCommand:vscodeAgentOrchestrator.runNode",
     "workspaceContains:.agent-orchestrator/workflows.json"
   ],
   "main": "./dist/extension.js",
+  "bin": {
+    "agent-orchestrator": "./dist/agent-orchestrator.js"
+  },
   "contributes": {
     "commands": [
-      { "command": "vscodeAgentOrchestrator.openGraph", "title": "Agent Orchestrator: Open Graph Editor" },
-      { "command": "vscodeAgentOrchestrator.runNode", "title": "Agent Orchestrator: Run Node Manually" },
-      { "command": "vscodeAgentOrchestrator.tailLedger", "title": "Agent Orchestrator: Tail Ledger" },
-      { "command": "vscodeAgentOrchestrator.emergencyStop", "title": "Agent Orchestrator: Emergency Stop (disable all triggers)" }
+      {
+        "command": "vscodeAgentOrchestrator.openGraph",
+        "title": "Agent Orchestrator: Open Graph Editor"
+      },
+      {
+        "command": "vscodeAgentOrchestrator.runNode",
+        "title": "Agent Orchestrator: Run Node Manually"
+      },
+      {
+        "command": "vscodeAgentOrchestrator.tailLedger",
+        "title": "Agent Orchestrator: Tail Ledger"
+      },
+      {
+        "command": "vscodeAgentOrchestrator.emergencyStop",
+        "title": "Agent Orchestrator: Emergency Stop (disable all triggers)"
+      }
     ],
     "chatParticipants": [
       {
@@ -43,8 +60,14 @@
         "description": "Run a node from your workflow graph. Use /run <node-id> ...",
         "isSticky": true,
         "commands": [
-          { "name": "run", "description": "Run a node by id from the active workflow (e.g. /run sec)" },
-          { "name": "list", "description": "List nodes defined in the active workflow" }
+          {
+            "name": "run",
+            "description": "Run a node by id from the active workflow (e.g. /run sec)"
+          },
+          {
+            "name": "list",
+            "description": "List nodes defined in the active workflow"
+          }
         ]
       }
     ],
@@ -73,11 +96,17 @@
   "scripts": {
     "build:ext": "esbuild src/extension.ts --bundle --platform=node --target=node20 --external:vscode --format=cjs --outfile=dist/extension.js",
     "build:webview": "esbuild webview/src/main.tsx --bundle --platform=browser --target=es2022 --format=iife --outfile=dist/webview.js --loader:.css=css",
-    "build": "npm run build:ext && npm run build:webview",
+    "build:cli": "esbuild src/headless/cli.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/agent-orchestrator.js",
+    "build": "npm run build:ext && npm run build:webview && npm run build:cli",
     "watch:ext": "npm run build:ext -- --watch=forever --sourcemap",
     "watch:webview": "npm run build:webview -- --watch=forever --sourcemap",
     "watch": "npm-run-all --parallel watch:ext watch:webview",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview/tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p webview/tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test:unit": "esbuild test/*.test.ts --bundle --platform=node --target=node20 --format=cjs --external:vscode --outdir=.tmp-tests && node --test .tmp-tests/*.js",
+    "test": "npm run typecheck && npm run test:unit",
+    "package:vsix": "npm run build && vsce package --no-dependencies --out vscode-agent-orchestrator.vsix",
+    "install:local": "npm run package:vsix && code --install-extension vscode-agent-orchestrator.vsix --force",
+    "uninstall:local": "code --uninstall-extension jpc-local.vscode-agent-orchestrator"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
@@ -85,6 +114,7 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@types/vscode": "^1.94.0",
+    "@vscode/vsce": "^3.9.1",
     "esbuild": "^0.24.0",
     "npm-run-all": "^4.1.5",
     "typescript": "^5.6.0"

@@ -1,14 +1,22 @@
 import React from "react";
-import type { WorkflowNode, TriggerConfig, TriggerType, ModelSelector } from "../../shared/types.js";
+import type {
+  WorkflowNode,
+  TriggerConfig,
+  TriggerType,
+  ModelSelector,
+  AgentOption,
+  ModelOption
+} from "../../shared/types.js";
 
 interface Props {
   node: WorkflowNode;
-  agents: Array<{ id: string; label: string; path: string }>;
+  agents: AgentOption[];
+  models: ModelOption[];
   onChange: (next: WorkflowNode) => void;
   onDelete: () => void;
 }
 
-export function NodeForm({ node, onChange, onDelete }: Props): JSX.Element {
+export function NodeForm({ node, agents, models, onChange, onDelete }: Props): JSX.Element {
   const set = <K extends keyof WorkflowNode>(key: K, value: WorkflowNode[K]): void => {
     onChange({ ...node, [key]: value });
   };
@@ -26,15 +34,42 @@ export function NodeForm({ node, onChange, onDelete }: Props): JSX.Element {
   };
 
   const m = node.model ?? null;
+  const selectedAgent = agents.find((agent) => agent.id === node.agent) ?? null;
+  const selectedModel = m ? models.find((model) => modelMatchesSelector(model, m)) ?? null : null;
+  const modelSelectValue = m ? (selectedModel ? modelKey(selectedModel) : "__custom") : "";
 
   return (
     <div>
-      <h3>Node · {node.id}</h3>
+      <h3>Node</h3>
+      <p className="field-note">ID: <code>{node.id}</code></p>
       <label>Label</label>
       <input value={node.label} onChange={(e) => set("label", e.target.value)} />
 
-      <label>Agent label (free-form, shown on the node)</label>
-      <input value={node.agent} onChange={(e) => set("agent", e.target.value)} placeholder="e.g. security-reviewer" />
+      <label>Agent</label>
+      <select
+        value={node.agent}
+        onChange={(e) => {
+          const nextAgent = agents.find((agent) => agent.id === e.target.value) ?? null;
+          onChange({
+            ...node,
+            agent: e.target.value,
+            label:
+              nextAgent && (node.label.trim() === "" || node.label === "New Persona")
+                ? nextAgent.label
+                : node.label
+          });
+        }}
+      >
+        <option value="">No custom agent</option>
+        {agents.map((agent) => (
+          <option key={`${agent.source}:${agent.id}`} value={agent.id} title={agent.path}>
+            {agent.label} ({agent.source})
+          </option>
+        ))}
+      </select>
+      {selectedAgent?.description ? (
+        <p className="field-note">{selectedAgent.description}</p>
+      ) : null}
 
       <label>On Trigger</label>
       <select value={node.trigger.type} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
@@ -43,6 +78,8 @@ export function NodeForm({ node, onChange, onDelete }: Props): JSX.Element {
         <option value="timer">Timer (cron)</option>
         <option value="ghPr">GitHub PR</option>
         <option value="fileChange">File change</option>
+        <option value="startup">Workspace start</option>
+        <option value="diagnostics">Problems / diagnostics</option>
       </select>
 
       <TriggerFields trigger={node.trigger} onChange={setTrigger} />
@@ -57,33 +94,30 @@ export function NodeForm({ node, onChange, onDelete }: Props): JSX.Element {
 
       <h3 style={{ marginTop: 18 }}>Model (optional)</h3>
       <p style={{ fontSize: 11, opacity: 0.7, marginTop: 0 }}>
-        Leave blank to use whatever the user picks in the native chat model dropdown. Fill in to pre-select a specific model via{" "}
-        <code>vscode.lm.selectChatModels</code>.
+        Leave blank to use whatever the user picks in the native chat model dropdown.
       </p>
-      <div className="row">
-        <div>
-          <label>Vendor</label>
-          <input
-            value={m?.vendor ?? ""}
-            placeholder="copilot"
-            onChange={(e) => setModel(updateModel(m, { vendor: e.target.value || undefined }))}
-          />
-        </div>
-        <div>
-          <label>Family</label>
-          <input
-            value={m?.family ?? ""}
-            placeholder="gpt-4o"
-            onChange={(e) => setModel(updateModel(m, { family: e.target.value || undefined }))}
-          />
-        </div>
-      </div>
-      <label>Specific model id (optional)</label>
-      <input
-        value={m?.id ?? ""}
-        placeholder="(leave blank to match by vendor/family)"
-        onChange={(e) => setModel(updateModel(m, { id: e.target.value || undefined }))}
-      />
+      <label>Model</label>
+      <select
+        value={modelSelectValue}
+        onChange={(e) => {
+          const value = e.target.value;
+          if (!value) {
+            setModel(null);
+            return;
+          }
+          const nextModel = models.find((model) => modelKey(model) === value);
+          setModel(nextModel ? selectorFromModel(nextModel) : m);
+        }}
+      >
+        <option value="">Use chat picker default</option>
+        {m && !selectedModel ? <option value="__custom">Custom: {formatModelSelector(m)}</option> : null}
+        {models.map((model) => (
+          <option key={modelKey(model)} value={modelKey(model)}>
+            {model.name} ({model.vendor})
+          </option>
+        ))}
+      </select>
+      {m ? <p className="field-note">{formatModelSelector(m)}</p> : null}
 
       <div className="row" style={{ marginTop: 12 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -104,13 +138,37 @@ export function NodeForm({ node, onChange, onDelete }: Props): JSX.Element {
   );
 }
 
-function updateModel(prev: ModelSelector | null, patch: Partial<ModelSelector>): ModelSelector | null {
-  const next: ModelSelector = { ...(prev ?? {}), ...patch };
-  // Clean undefined keys so the JSON representation is tidy.
-  for (const k of Object.keys(next) as Array<keyof ModelSelector>) {
-    if (next[k] === undefined || next[k] === "") delete next[k];
-  }
-  return Object.keys(next).length === 0 ? null : next;
+function selectorFromModel(model: ModelOption): ModelSelector {
+  return {
+    vendor: model.vendor,
+    family: model.family,
+    id: model.id,
+    version: model.version
+  };
+}
+
+function modelMatchesSelector(model: ModelOption, selector: ModelSelector): boolean {
+  return (
+    (!selector.vendor || selector.vendor === model.vendor) &&
+    (!selector.family || selector.family === model.family) &&
+    (!selector.id || selector.id === model.id) &&
+    (!selector.version || selector.version === model.version)
+  );
+}
+
+function modelKey(model: ModelOption): string {
+  return [model.vendor, model.family, model.id, model.version].join("||");
+}
+
+function formatModelSelector(selector: ModelSelector): string {
+  return [
+    selector.vendor ? `vendor=${selector.vendor}` : "",
+    selector.family ? `family=${selector.family}` : "",
+    selector.id ? `id=${selector.id}` : "",
+    selector.version ? `version=${selector.version}` : ""
+  ]
+    .filter(Boolean)
+    .join(", ");
 }
 
 function TriggerFields({
@@ -176,6 +234,49 @@ function TriggerFields({
           />
         </>
       );
+    case "startup":
+      return (
+        <>
+          <label>Delay after activation (seconds)</label>
+          <input
+            type="number"
+            min={0}
+            max={3600}
+            value={trigger.delaySeconds ?? 3}
+            onChange={(e) => onChange({ ...trigger, delaySeconds: Number(e.target.value) || 0 })}
+          />
+        </>
+      );
+    case "diagnostics":
+      return (
+        <>
+          <label>File glob</label>
+          <input
+            value={trigger.glob}
+            placeholder="src/**/*"
+            onChange={(e) => onChange({ ...trigger, glob: e.target.value })}
+          />
+          <label>Severity</label>
+          <select
+            value={trigger.severity}
+            onChange={(e) => onChange({ ...trigger, severity: e.target.value as typeof trigger.severity })}
+          >
+            <option value="any">Any</option>
+            <option value="error">Errors</option>
+            <option value="warning">Warnings</option>
+            <option value="info">Info</option>
+            <option value="hint">Hints</option>
+          </select>
+          <label>Debounce (milliseconds)</label>
+          <input
+            type="number"
+            min={100}
+            max={60000}
+            value={trigger.debounceMs ?? 1000}
+            onChange={(e) => onChange({ ...trigger, debounceMs: Number(e.target.value) || 1000 })}
+          />
+        </>
+      );
     case "handoff":
     case "manual":
     default:
@@ -195,5 +296,9 @@ function defaultTrigger(type: TriggerType): TriggerConfig {
       return { type: "manual" };
     case "fileChange":
       return { type: "fileChange", glob: "src/**/*.ts" };
+    case "startup":
+      return { type: "startup", delaySeconds: 3 };
+    case "diagnostics":
+      return { type: "diagnostics", glob: "src/**/*", severity: "error", debounceMs: 1000 };
   }
 }

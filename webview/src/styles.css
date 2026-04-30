@@ -98,6 +98,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 }
 .side-panel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
 .side-panel label { display: block; margin: 8px 0 4px; font-size: 11px; opacity: 0.85; }
+.side-panel .field-note { margin: 6px 0 0; font-size: 11px; opacity: 0.72; line-height: 1.35; }
 .side-panel .row { display: flex; gap: 6px; }
 .side-panel .row > * { flex: 1; }
 
@@ -120,13 +121,27 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   background: var(--vscode-editor-background);
   border: 1.5px solid var(--vscode-editorWidget-border, #555);
   border-radius: 6px;
+  box-sizing: border-box;
   padding: 10px 12px;
+  width: 100%;
   min-width: 200px;
+  min-height: 96px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   position: relative;
 }
 .persona-node.selected { border-color: var(--vscode-focusBorder); }
-.persona-node .label { font-weight: 600; margin-bottom: 6px; }
+.persona-node.activity-queued,
+.persona-node.activity-running { border-color: var(--vscode-charts-orange, #d18616); }
+.persona-node.activity-completed { border-color: var(--vscode-charts-green, #3fb950); }
+.persona-node.activity-errored,
+.persona-node.activity-blocked { border-color: var(--vscode-errorForeground, #f85149); }
+.persona-node .label {
+  font-weight: 600;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .persona-node .trigger-badge {
   display: inline-block;
   padding: 1px 6px;
@@ -135,9 +150,49 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
   margin-bottom: 6px;
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.persona-node .agent { font-size: 10px; opacity: 0.7; margin-bottom: 4px; }
-.persona-node .context { font-size: 11px; opacity: 0.85; max-height: 60px; overflow: hidden; text-overflow: ellipsis; }
+.persona-node .runtime-badge {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  max-width: 98px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+}
+.persona-node .runtime-badge.queued,
+.persona-node .runtime-badge.running { color: var(--vscode-charts-orange, #d18616); }
+.persona-node .runtime-badge.completed { color: var(--vscode-charts-green, #3fb950); }
+.persona-node .runtime-badge.errored,
+.persona-node .runtime-badge.blocked { color: var(--vscode-errorForeground, #f85149); }
+.persona-node .agent {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.persona-node .context {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 11px;
+  opacity: 0.85;
+  max-height: 36px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
 .persona-node.disabled { opacity: 0.45; }
 
 .persona-node .handle-in {
@@ -161,17 +216,16 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   letter-spacing: 0.05em;
   opacity: 0.75;
   pointer-events: none;
+  z-index: 2;
 }
 .persona-node .handle-label-in {
-  left: -22px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: -6px;
+  top: -15px;
   color: var(--vscode-charts-blue, #3794ff);
 }
 .persona-node .handle-label-out {
-  right: -32px;
-  top: 50%;
-  transform: translateY(-50%);
+  right: -6px;
+  bottom: -15px;
   color: var(--vscode-charts-orange, #d18616);
 }
 
@@ -179,5 +233,37 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   stroke: var(--vscode-charts-orange, #d18616) !important;
   stroke-width: 2 !important;
 }
+.react-flow__edge.edge-active .react-flow__edge-path {
+  stroke: var(--vscode-charts-green, #3fb950) !important;
+  stroke-width: 3 !important;
+}
 .react-flow__edge.selected .react-flow__edge-path { stroke: var(--vscode-focusBorder) !important; }
 .react-flow__arrowhead { fill: var(--vscode-charts-orange, #d18616); }
+
+.activity-panel {
+  margin-top: 18px;
+  border-top: 1px solid var(--vscode-editorWidget-border, transparent);
+  padding-top: 12px;
+}
+.activity-status {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+}
+.activity-status.queued,
+.activity-status.running { color: var(--vscode-charts-orange, #d18616); }
+.activity-status.completed { color: var(--vscode-charts-green, #3fb950); }
+.activity-status.errored,
+.activity-status.blocked { color: var(--vscode-errorForeground, #f85149); }
+
+.workflow-minimap {
+  background: var(--vscode-editorWidget-background) !important;
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  border-radius: 3px;
+}
+.workflow-minimap .react-flow__minimap-mask {
+  fill: rgba(0, 0, 0, 0.28) !important;
+}

@@ -1,7 +1,14 @@
 // Shared types between extension host and webview.
 // Pure types only — no imports, no runtime code.
 
-export type TriggerType = "ghPr" | "timer" | "handoff" | "manual" | "fileChange";
+export type TriggerType =
+  | "ghPr"
+  | "timer"
+  | "handoff"
+  | "manual"
+  | "fileChange"
+  | "startup"
+  | "diagnostics";
 
 export interface TriggerGhPr {
   type: "ghPr";
@@ -29,12 +36,26 @@ export interface TriggerFileChange {
   glob: string;
 }
 
+export interface TriggerStartup {
+  type: "startup";
+  delaySeconds?: number;
+}
+
+export interface TriggerDiagnostics {
+  type: "diagnostics";
+  glob: string;
+  severity: "any" | "error" | "warning" | "info" | "hint";
+  debounceMs?: number;
+}
+
 export type TriggerConfig =
   | TriggerGhPr
   | TriggerTimer
   | TriggerHandoff
   | TriggerManual
-  | TriggerFileChange;
+  | TriggerFileChange
+  | TriggerStartup
+  | TriggerDiagnostics;
 
 export interface NodePosition {
   x: number;
@@ -44,7 +65,7 @@ export interface NodePosition {
 export interface WorkflowNode {
   id: string;
   label: string;
-  /** Free-form agent label, displayed in the graph. Has no runtime effect — the chat participant uses `context` as the system prompt. */
+  /** VS Code custom agent id from *.agent.md, used to load the agent instructions at runtime. */
   agent: string;
   trigger: TriggerConfig;
   context: string;
@@ -64,6 +85,24 @@ export interface ModelSelector {
   family?: string;
   id?: string;
   version?: string;
+}
+
+export interface AgentOption {
+  id: string;
+  label: string;
+  path: string;
+  source: "user" | "workspace";
+  description?: string;
+  defaultModel?: string;
+}
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  vendor: string;
+  family: string;
+  version: string;
+  maxInputTokens: number;
 }
 
 export interface WorkflowEdge {
@@ -110,12 +149,20 @@ export interface HandoffPayload {
 }
 
 export type LedgerEventType =
+  | "attempt.started"
+  | "attempt.phase"
+  | "attempt.succeeded"
+  | "attempt.failed"
+  | "attempt.hookSucceeded"
+  | "attempt.hookFailed"
   | "trigger.fired"
   | "session.spawned"
   | "session.errored"
   | "handoff.emitted"
   | "handoff.delivered"
   | "handoff.consumed"
+  | "file.written"
+  | "file.writeFailed"
   | "guardrail.tripped"
   | "workflow.saved";
 
@@ -136,14 +183,17 @@ export type WebviewToExt =
   | { type: "workflow.requestLoad" }
   | { type: "workflow.save"; workflow: Workflow }
   | { type: "agents.requestList" }
-  | { type: "node.run"; nodeId: string }
+  | { type: "models.requestList" }
+  | { type: "node.run"; nodeId: string; workflow?: Workflow }
   | { type: "ledger.tail" }
-  | { type: "trigger.test"; nodeId: string };
+  | { type: "trigger.test"; nodeId: string; workflow?: Workflow };
 
 export type ExtToWebview =
   | { type: "workflow.loaded"; workflow: Workflow }
   | { type: "workflow.saved"; ok: boolean; error?: string }
-  | { type: "agents.list"; agents: Array<{ id: string; label: string; path: string }> }
+  | { type: "agents.list"; agents: AgentOption[] }
+  | { type: "models.list"; models: ModelOption[] }
   | { type: "node.runResult"; nodeId: string; ok: boolean; error?: string }
+  | { type: "trigger.testResult"; nodeId: string; ok: boolean; error?: string }
   | { type: "ledger.append"; entry: LedgerEntry }
   | { type: "toast"; level: "info" | "warn" | "error"; message: string };

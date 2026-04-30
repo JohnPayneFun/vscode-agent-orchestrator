@@ -35,7 +35,9 @@ State lives in `.agent-orchestrator/` at the workspace root:
 | `timer` | A 5-field cron expression matches local (or UTC) time |
 | `handoff` | A new file appears in this node's inbox |
 | `manual` | You click ▶ Run on the node, or type `@orchestrator /run <id>` |
-| `fileChange` | (v1.1) A workspace file matches a glob |
+| `fileChange` | A workspace file matching a glob is created, changed, or deleted |
+| `startup` | The workspace activates the extension, after an optional delay |
+| `diagnostics` | VS Code Problems/diagnostics change for matching files and severity |
 
 ## Per-node model selection
 
@@ -44,7 +46,7 @@ Each node has an optional `model` selector (`vendor` / `family` / `id`) that map
 ## Quick start
 
 ```sh
-git clone https://github.com/<you>/vscode-agent-orchestrator
+git clone https://github.com/JohnPayneFun/vscode-agent-orchestrator
 cd vscode-agent-orchestrator
 npm install
 npm run build
@@ -57,6 +59,53 @@ In the dev host window:
 1. `Ctrl+Shift+P` → **Agent Orchestrator: Open Graph Editor**
 2. Click a node → ▶ Run selected (or type `@orchestrator /run sec` in the native chat)
 3. The native chat panel streams the response using your selected model
+
+## Local install
+
+For day-to-day use, install a local VSIX into your normal VS Code instead of launching the Extension Development Host every time:
+
+```sh
+npm run install:local
+```
+
+Then reload VS Code and search the Command Palette for **Agent Orchestrator**. The extension id is `jpc-local.vscode-agent-orchestrator`.
+
+When you change extension source, run `npm run install:local` again and reload VS Code. For debugging breakpoints and extension-host logs, keep using `F5` / **Run Extension**.
+
+To remove the local install:
+
+```sh
+npm run uninstall:local
+```
+
+## Headless preview
+
+The package now also builds a small Node CLI that uses the VS Code-independent runner. This is the first step toward daemon mode; today it is useful for dry runs and static-response smoke tests outside VS Code.
+
+```sh
+npm run build
+node dist/agent-orchestrator.js list
+node dist/agent-orchestrator.js run Project_Manager --dry-run
+node dist/agent-orchestrator.js run Project_Manager --mock-response "Two sentences from the headless runner."
+```
+
+The preview CLI does not have a real external LLM provider yet. Use `--dry-run` to validate dispatch/prompt wiring, or `--mock-response` to push a deterministic response through file artifacts, graph-edge handoffs, and the ledger.
+
+You can add optional headless workspace hooks directly in `.agent-orchestrator/workflows.json`:
+
+```jsonc
+{
+    "headless": {
+        "hooks": {
+            "beforeRun": "npm test",
+            "afterRun": "node scripts/collect-proof.js",
+            "timeoutMs": 60000
+        }
+    }
+}
+```
+
+Hooks run from the workspace root. `beforeRun` failures fail the attempt; `afterRun` is best-effort and always recorded in the ledger.
 
 ## Commands
 

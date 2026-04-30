@@ -1,6 +1,5 @@
 import * as path from "path";
 import * as fs from "fs";
-import * as vscode from "vscode";
 
 export interface OrchestrationPaths {
   workspaceRoot: string;
@@ -15,6 +14,8 @@ export interface OrchestrationPaths {
 }
 
 export function workspaceRoot(): string | undefined {
+  const moduleName = "vscode";
+  const vscode = require(moduleName) as typeof import("vscode");
   const folder = vscode.workspace.workspaceFolders?.[0];
   return folder?.uri.fsPath;
 }
