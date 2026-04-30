@@ -1,8 +1,9 @@
 node_modules/
-dist/
 *.vsix
 .DS_Store
 *.log
+# Note: dist/ IS committed so a fresh clone can F5 the dev host without an
+# install + build step. Run `npm run build` before committing source changes.
 
 # Runtime state — only workflows.json should be committed inside .agent-orchestrator/
 .agent-orchestrator/inbox/
