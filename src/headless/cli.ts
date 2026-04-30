@@ -6,7 +6,7 @@ import { MessageBus } from "../orchestration/message-bus.js";
 import { ensureDirs, paths } from "../orchestration/paths.js";
 import { formatNodeReference, resolveWorkflowNode } from "../orchestration/node-resolver.js";
 import { WorkflowStore } from "../orchestration/workflow-store.js";
-import { createStaticModelProvider, createUnavailableModelProvider } from "./model-providers.js";
+import { createHeadlessModelProvider } from "./model-providers.js";
 import { getHeadlessRuntimeConfig, runHeadlessNodeAttempt } from "./run-attempt.js";
 
 interface CliOptions {
@@ -14,6 +14,9 @@ interface CliOptions {
   dryRun: boolean;
   json: boolean;
   mockResponse?: string;
+  provider?: string;
+  model?: string;
+  baseUrl?: string;
 }
 
 interface ParsedArgs {
@@ -91,10 +94,12 @@ async function runNode(
     return 1;
   }
 
-  const mockResponse = parsed.options.mockResponse ?? process.env.AGENT_ORCHESTRATOR_MOCK_RESPONSE;
-  const modelProvider = mockResponse === undefined
-    ? createUnavailableModelProvider()
-    : createStaticModelProvider(mockResponse);
+  const modelProvider = createHeadlessModelProvider({
+    mockResponse: parsed.options.mockResponse ?? process.env.AGENT_ORCHESTRATOR_MOCK_RESPONSE,
+    provider: parsed.options.provider,
+    model: parsed.options.model,
+    baseUrl: parsed.options.baseUrl
+  });
   const ledger = new Ledger(p.ledgerJsonl);
   const bus = new MessageBus(p);
   const markdown: string[] = [];
@@ -155,6 +160,12 @@ function parseArgs(argv: string[]): ParsedArgs {
       options.json = true;
     } else if (arg === "--mock-response") {
       options.mockResponse = requireValue(argv, ++index, arg);
+    } else if (arg === "--provider") {
+      options.provider = requireValue(argv, ++index, arg);
+    } else if (arg === "--model") {
+      options.model = requireValue(argv, ++index, arg);
+    } else if (arg === "--base-url") {
+      options.baseUrl = requireValue(argv, ++index, arg);
     } else {
       positionals.push(arg);
     }
@@ -171,7 +182,7 @@ function requireValue(argv: string[], index: number, flag: string): string {
 }
 
 function usage(): string {
-  return `Agent Orchestrator headless preview\n\nUsage:\n  agent-orchestrator list [--workspace <path>]\n  agent-orchestrator run <node-label-or-id> [message...] [--workspace <path>] [--dry-run] [--mock-response <text>] [--json]\n\nNotes:\n  --dry-run records the attempt and prompt length without calling a model.\n  --mock-response feeds a static response through the real runner for local smoke tests.\n`;
+  return `Agent Orchestrator headless preview\n\nUsage:\n  agent-orchestrator list [--workspace <path>]\n  agent-orchestrator run <node-label-or-id> [message...] [--workspace <path>] [--dry-run] [--mock-response <text>] [--provider openai] [--model <name>] [--base-url <url>] [--json]\n\nNotes:\n  --dry-run records the attempt and prompt length without calling a model.\n  --mock-response feeds a static response through the real runner for local smoke tests.\n  Set OPENAI_API_KEY, then use --provider openai for real headless model calls.\n`;
 }
 
 if (require.main === module) {

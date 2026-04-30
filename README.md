@@ -80,7 +80,7 @@ npm run uninstall:local
 
 ## Headless preview
 
-The package now also builds a small Node CLI that uses the VS Code-independent runner. This is the first step toward daemon mode; today it is useful for dry runs and static-response smoke tests outside VS Code.
+The package now also builds a small Node CLI that uses the VS Code-independent runner. This is the first step toward daemon mode; today it is useful for dry runs, static-response smoke tests, and OpenAI-compatible model calls outside VS Code.
 
 ```sh
 npm run build
@@ -89,7 +89,16 @@ node dist/agent-orchestrator.js run Project_Manager --dry-run
 node dist/agent-orchestrator.js run Project_Manager --mock-response "Two sentences from the headless runner."
 ```
 
-The preview CLI does not have a real external LLM provider yet. Use `--dry-run` to validate dispatch/prompt wiring, or `--mock-response` to push a deterministic response through file artifacts, graph-edge handoffs, and the ledger.
+Use `--dry-run` to validate dispatch/prompt wiring, or `--mock-response` to push a deterministic response through file artifacts, graph-edge handoffs, and the ledger.
+
+For real headless model calls, configure an OpenAI-compatible provider:
+
+```sh
+set OPENAI_API_KEY=sk-...
+node dist/agent-orchestrator.js run Project_Manager --provider openai --model gpt-4o-mini
+```
+
+The CLI also honors `AGENT_ORCHESTRATOR_MODEL_PROVIDER`, `AGENT_ORCHESTRATOR_MODEL`, `AGENT_ORCHESTRATOR_OPENAI_API_KEY`, and `AGENT_ORCHESTRATOR_OPENAI_BASE_URL`. `OPENAI_BASE_URL` works for OpenAI-compatible gateways, local servers, and proxy providers that expose `/v1/chat/completions`.
 
 You can add optional headless workspace hooks directly in `.agent-orchestrator/workflows.json`:
 

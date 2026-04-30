@@ -8750,6 +8750,31 @@ var WorkflowStore = class {
 };
 
 // src/headless/model-providers.ts
+var DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+var DEFAULT_OPENAI_MODEL = "gpt-4o-mini";
+function createHeadlessModelProvider(options = {}) {
+  if (options.mockResponse !== void 0) return createStaticModelProvider(options.mockResponse);
+  const env = options.env ?? process.env;
+  const provider = (options.provider ?? env.AGENT_ORCHESTRATOR_MODEL_PROVIDER ?? inferProvider(env))?.trim().toLocaleLowerCase();
+  if (!provider) return createUnavailableModelProvider();
+  if (provider === "openai" || provider === "openai-compatible") {
+    const apiKey = env.AGENT_ORCHESTRATOR_OPENAI_API_KEY ?? env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return createUnavailableModelProvider(
+        "OpenAI-compatible provider selected, but no API key is configured. Set OPENAI_API_KEY or AGENT_ORCHESTRATOR_OPENAI_API_KEY."
+      );
+    }
+    return createOpenAiCompatibleModelProvider({
+      apiKey,
+      baseUrl: options.baseUrl ?? env.AGENT_ORCHESTRATOR_OPENAI_BASE_URL ?? env.OPENAI_BASE_URL,
+      model: options.model ?? env.AGENT_ORCHESTRATOR_MODEL ?? env.OPENAI_MODEL,
+      fetchImpl: options.fetchImpl
+    });
+  }
+  return createUnavailableModelProvider(
+    `Unsupported headless model provider: ${provider}. Supported providers: openai, openai-compatible.`
+  );
+}
 function createStaticModelProvider(response) {
   return {
     async selectModel(selector) {
@@ -8765,14 +8790,92 @@ function createStaticModelProvider(response) {
     }
   };
 }
-function createUnavailableModelProvider() {
+function createOpenAiCompatibleModelProvider(options) {
+  const baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_OPENAI_BASE_URL);
+  const fetchImpl = options.fetchImpl ?? globalFetch;
+  return {
+    async selectModel(selector) {
+      const model = options.model ?? selector?.id ?? selector?.family ?? DEFAULT_OPENAI_MODEL;
+      return {
+        id: model,
+        name: model,
+        vendor: selector?.vendor ?? "openai-compatible",
+        family: selector?.family ?? model,
+        async *sendRequest(messages) {
+          const response = await fetchImpl(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${options.apiKey}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ model, messages: toOpenAiMessages(messages) })
+          });
+          const body = await response.text();
+          if (!response.ok) {
+            throw new Error(
+              `OpenAI-compatible provider failed (${response.status} ${response.statusText}): ${extractErrorMessage(body)}`
+            );
+          }
+          yield extractAssistantMessage(body);
+        }
+      };
+    }
+  };
+}
+function createUnavailableModelProvider(message) {
   return {
     async selectModel() {
       throw new Error(
-        "No headless model provider is configured yet. Use --dry-run or --mock-response for this preview CLI."
+        message ?? "No headless model provider is configured. Use --dry-run, --mock-response, or configure an OpenAI-compatible provider."
       );
     }
   };
+}
+function inferProvider(env) {
+  return env.AGENT_ORCHESTRATOR_OPENAI_API_KEY || env.OPENAI_API_KEY ? "openai" : void 0;
+}
+function normalizeBaseUrl(baseUrl) {
+  return baseUrl.replace(/\/+$/g, "");
+}
+function globalFetch(url, init) {
+  const fn = globalThis.fetch;
+  if (!fn) throw new Error("This Node.js runtime does not provide fetch. Use Node 20 or newer.");
+  return fn(url, init);
+}
+function toOpenAiMessages(messages) {
+  return messages.map((message) => ({ role: message.role, content: message.content }));
+}
+function extractAssistantMessage(rawBody) {
+  let parsed;
+  try {
+    parsed = JSON.parse(rawBody);
+  } catch {
+    throw new Error("OpenAI-compatible provider returned invalid JSON.");
+  }
+  const choices = getRecord(parsed).choices;
+  if (!Array.isArray(choices) || choices.length === 0) {
+    throw new Error("OpenAI-compatible provider returned no choices.");
+  }
+  const content = getRecord(getRecord(choices[0]).message).content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content.map((part) => {
+      const record = getRecord(part);
+      return typeof record.text === "string" ? record.text : "";
+    }).join("");
+  }
+  throw new Error("OpenAI-compatible provider returned no assistant message content.");
+}
+function extractErrorMessage(rawBody) {
+  try {
+    const message = getRecord(getRecord(JSON.parse(rawBody)).error).message;
+    return typeof message === "string" && message.trim() ? message : rawBody.slice(0, 500);
+  } catch {
+    return rawBody.slice(0, 500) || "empty response";
+  }
+}
+function getRecord(value) {
+  return value && typeof value === "object" ? value : {};
 }
 
 // src/headless/run-attempt.ts
@@ -9416,8 +9519,12 @@ async function runNode(parsed, out, err) {
 `);
     return 1;
   }
-  const mockResponse = parsed.options.mockResponse ?? process.env.AGENT_ORCHESTRATOR_MOCK_RESPONSE;
-  const modelProvider = mockResponse === void 0 ? createUnavailableModelProvider() : createStaticModelProvider(mockResponse);
+  const modelProvider = createHeadlessModelProvider({
+    mockResponse: parsed.options.mockResponse ?? process.env.AGENT_ORCHESTRATOR_MOCK_RESPONSE,
+    provider: parsed.options.provider,
+    model: parsed.options.model,
+    baseUrl: parsed.options.baseUrl
+  });
   const ledger = new Ledger(p.ledgerJsonl);
   const bus = new MessageBus(p);
   const markdown = [];
@@ -9476,6 +9583,12 @@ function parseArgs(argv) {
       options.json = true;
     } else if (arg === "--mock-response") {
       options.mockResponse = requireValue(argv, ++index, arg);
+    } else if (arg === "--provider") {
+      options.provider = requireValue(argv, ++index, arg);
+    } else if (arg === "--model") {
+      options.model = requireValue(argv, ++index, arg);
+    } else if (arg === "--base-url") {
+      options.baseUrl = requireValue(argv, ++index, arg);
     } else {
       positionals.push(arg);
     }
@@ -9493,11 +9606,12 @@ function usage() {
 
 Usage:
   agent-orchestrator list [--workspace <path>]
-  agent-orchestrator run <node-label-or-id> [message...] [--workspace <path>] [--dry-run] [--mock-response <text>] [--json]
+  agent-orchestrator run <node-label-or-id> [message...] [--workspace <path>] [--dry-run] [--mock-response <text>] [--provider openai] [--model <name>] [--base-url <url>] [--json]
 
 Notes:
   --dry-run records the attempt and prompt length without calling a model.
   --mock-response feeds a static response through the real runner for local smoke tests.
+  Set OPENAI_API_KEY, then use --provider openai for real headless model calls.
 `;
 }
 if (require.main === module) {
