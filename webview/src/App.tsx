@@ -40,14 +40,19 @@ const EMPTY_WORKFLOW: Workflow = {
   edges: []
 };
 
+const EDGE_ACTIVITY_TTL_MS = 12_000;
+const EDGE_ACTIVITY_TICK_MS = 1_000;
+
 export function App(): JSX.Element {
   const [workflow, setWorkflow] = useState<Workflow>(EMPTY_WORKFLOW);
   const [view, setView] = useState<View>("graph");
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [status, setStatus] = useState<string>("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [dirty, setDirty] = useState(false);
   const initRef = useRef(false);
   const workflowRef = useRef(workflow);
@@ -87,6 +92,7 @@ export function App(): JSX.Element {
           setModels(msg.models);
           break;
         case "ledger.append":
+          setNowMs(Date.now());
           setLedger((prev) => [...prev.slice(-499), msg.entry]);
           break;
         case "node.runResult":
@@ -121,13 +127,38 @@ export function App(): JSX.Element {
     return () => window.clearTimeout(timer);
   }, [dirty, workflow]);
 
+  useEffect(() => {
+    if (view !== "graph") return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), EDGE_ACTIVITY_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [view]);
+
   const selectedNode = useMemo(
     () => (selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null),
     [selectedNodeId, workflow]
   );
+  const selectedEdge = useMemo(
+    () => (selectedEdgeId ? workflow.edges.find((edge) => edge.id === selectedEdgeId) ?? null : null),
+    [selectedEdgeId, workflow]
+  );
   const activityByNode = useMemo(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
-  const activityByEdge = useMemo(() => buildEdgeActivity(workflow, ledger), [workflow, ledger]);
+  const activityByEdge = useMemo(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
   const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
+
+  const selectNode = (id: string | null): void => {
+    setSelectedNodeId(id);
+    setSelectedEdgeId(null);
+  };
+
+  const selectEdge = (id: string | null): void => {
+    setSelectedEdgeId(id);
+    setSelectedNodeId(null);
+  };
+
+  const clearSelection = (): void => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  };
 
   const updateNode = (next: WorkflowNode): void => {
     setWorkflow((wf) => ({
@@ -149,7 +180,7 @@ export function App(): JSX.Element {
       enabled: true
     };
     setWorkflow((wf) => ({ ...wf, nodes: [...wf.nodes, newNode] }));
-    setSelectedNodeId(id);
+    selectNode(id);
     setDirty(true);
   };
 
@@ -159,7 +190,7 @@ export function App(): JSX.Element {
       nodes: wf.nodes.filter((n) => n.id !== id),
       edges: wf.edges.filter((e) => e.from !== id && e.to !== id)
     }));
-    setSelectedNodeId(null);
+    clearSelection();
     setDirty(true);
   };
 
@@ -174,6 +205,7 @@ export function App(): JSX.Element {
 
   const removeEdge = (id: string): void => {
     setWorkflow((wf) => ({ ...wf, edges: wf.edges.filter((e) => e.id !== id) }));
+    if (selectedEdgeId === id) setSelectedEdgeId(null);
     setDirty(true);
   };
 
@@ -230,7 +262,10 @@ export function App(): JSX.Element {
             activityByNode={activityByNode}
             activityByEdge={activityByEdge}
             selectedNodeId={selectedNodeId}
-            onSelect={setSelectedNodeId}
+            selectedEdgeId={selectedEdgeId}
+            onSelectNode={selectNode}
+            onSelectEdge={selectEdge}
+            onClearSelection={clearSelection}
             onMove={moveNode}
             onAddEdge={addEdge}
             onRemoveEdge={removeEdge}
@@ -252,6 +287,12 @@ export function App(): JSX.Element {
             />
             <NodeActivityPanel activity={selectedActivity} />
           </>
+        ) : selectedEdge ? (
+          <ConnectionPanel
+            workflow={workflow}
+            edgeId={selectedEdge.id}
+            onDelete={() => removeEdge(selectedEdge.id)}
+          />
         ) : (
           <div>
             <h3>Workflow</h3>
@@ -299,6 +340,33 @@ export function App(): JSX.Element {
       </div>
 
       <LedgerPanel entries={ledger} />
+    </div>
+  );
+}
+
+function ConnectionPanel({
+  workflow,
+  edgeId,
+  onDelete
+}: {
+  workflow: Workflow;
+  edgeId: string;
+  onDelete: () => void;
+}): JSX.Element {
+  const edge = workflow.edges.find((candidate) => candidate.id === edgeId);
+  const fromNode = edge ? workflow.nodes.find((node) => node.id === edge.from) : null;
+  const toNode = edge ? workflow.nodes.find((node) => node.id === edge.to) : null;
+  return (
+    <div>
+      <h3>Connection</h3>
+      <p className="field-note">ID: <code>{edgeId}</code></p>
+      <label>From</label>
+      <input value={fromNode?.label ?? edge?.from ?? ""} readOnly />
+      <label>To</label>
+      <input value={toNode?.label ?? edge?.to ?? ""} readOnly />
+      <div className="row" style={{ marginTop: 16 }}>
+        <button className="danger" onClick={onDelete}>Delete connection</button>
+      </div>
     </div>
   );
 }
@@ -430,10 +498,12 @@ function activityFromEntry(
   }
 }
 
-function buildEdgeActivity(workflow: Workflow, entries: LedgerEntry[]): Record<string, EdgeActivity> {
+function buildEdgeActivity(workflow: Workflow, entries: LedgerEntry[], nowMs: number): Record<string, EdgeActivity> {
   const activity: Record<string, EdgeActivity> = {};
   for (const entry of entries) {
     if (entry.type !== "handoff.emitted") continue;
+    const timestamp = Date.parse(entry.ts);
+    if (Number.isNaN(timestamp) || nowMs - timestamp > EDGE_ACTIVITY_TTL_MS) continue;
     const from = typeof entry.from === "string" ? entry.from : undefined;
     const to = typeof entry.to === "string" ? entry.to : undefined;
     if (!from || !to) continue;

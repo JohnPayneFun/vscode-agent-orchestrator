@@ -219,13 +219,15 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   z-index: 2;
 }
 .persona-node .handle-label-in {
-  left: -6px;
-  top: -15px;
+  right: calc(100% + 16px);
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--vscode-charts-blue, #3794ff);
 }
 .persona-node .handle-label-out {
-  right: -6px;
-  bottom: -15px;
+  left: calc(100% + 16px);
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--vscode-charts-orange, #d18616);
 }
 

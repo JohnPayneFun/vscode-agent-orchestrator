@@ -25,7 +25,10 @@ interface Props {
   activityByNode: Record<string, NodeActivity>;
   activityByEdge: Record<string, EdgeActivity>;
   selectedNodeId: string | null;
-  onSelect: (id: string | null) => void;
+  selectedEdgeId: string | null;
+  onSelectNode: (id: string | null) => void;
+  onSelectEdge: (id: string | null) => void;
+  onClearSelection: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onAddEdge: (from: string, to: string) => void;
   onRemoveEdge: (id: string) => void;
@@ -54,7 +57,7 @@ function PersonaNode({ data, selected }: NodeProps<FlowNode>): JSX.Element {
       <div className="label">{node.label}</div>
       <div className="agent">{node.agent}</div>
       <div className="context">{node.context || <em style={{ opacity: 0.5 }}>(no context)</em>}</div>
-      <span className="handle-label handle-label-out">OUT →</span>
+      <span className="handle-label handle-label-out">OUT</span>
       <Handle
         type="source"
         position={Position.Right}
@@ -99,7 +102,10 @@ function GraphViewInner({
   activityByNode,
   activityByEdge,
   selectedNodeId,
-  onSelect,
+  selectedEdgeId,
+  onSelectNode,
+  onSelectEdge,
+  onClearSelection,
   onMove,
   onAddEdge,
   onRemoveEdge
@@ -125,6 +131,7 @@ function GraphViewInner({
         id: e.id,
         source: e.from,
         target: e.to,
+        selected: e.id === selectedEdgeId,
         label: activityByEdge[e.id]?.label ?? (e.via ? `via ${e.via}` : undefined),
         animated: true,
         markerEnd: {
@@ -134,7 +141,7 @@ function GraphViewInner({
           color: activityByEdge[e.id] ? "#3fb950" : "#d18616"
         }
       })),
-    [activityByEdge, workflow.edges]
+    [activityByEdge, selectedEdgeId, workflow.edges]
   );
 
   const handleNodesChange = useCallback(
@@ -147,10 +154,10 @@ function GraphViewInner({
       }
       // Selection
       const sel = next.find((n) => (n as FlowNode).selected);
-      if (sel && sel.id !== selectedNodeId) onSelect(sel.id);
-      else if (!sel && selectedNodeId) onSelect(null);
+      if (sel && sel.id !== selectedNodeId) onSelectNode(sel.id);
+      else if (!sel && selectedNodeId) onClearSelection();
     },
-    [flowNodes, onMove, onSelect, selectedNodeId]
+    [flowNodes, onClearSelection, onMove, onSelectNode, selectedNodeId]
   );
 
   const handleEdgesChange = useCallback(
@@ -179,8 +186,11 @@ function GraphViewInner({
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
-        onNodeClick={(_, n) => onSelect(n.id)}
-        onPaneClick={() => onSelect(null)}
+        onNodeClick={(_, n) => onSelectNode(n.id)}
+        onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
+        onEdgeDoubleClick={(_, edge) => onRemoveEdge(edge.id)}
+        onPaneClick={onClearSelection}
+        deleteKeyCode={["Backspace", "Delete"]}
         fitView
         proOptions={{ hideAttribution: true }}
       >

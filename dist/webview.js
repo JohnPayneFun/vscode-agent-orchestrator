@@ -33528,7 +33528,7 @@
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "label", children: node.label }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "agent", children: node.agent }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "context", children: node.context || /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("em", { style: { opacity: 0.5 }, children: "(no context)" }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "handle-label handle-label-out", children: "OUT \u2192" }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "handle-label handle-label-out", children: "OUT" }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
         Handle,
         {
@@ -33567,7 +33567,10 @@
     activityByNode,
     activityByEdge,
     selectedNodeId,
-    onSelect,
+    selectedEdgeId,
+    onSelectNode,
+    onSelectEdge,
+    onClearSelection,
     onMove,
     onAddEdge,
     onRemoveEdge
@@ -33590,6 +33593,7 @@
         id: e.id,
         source: e.from,
         target: e.to,
+        selected: e.id === selectedEdgeId,
         label: activityByEdge[e.id]?.label ?? (e.via ? `via ${e.via}` : void 0),
         animated: true,
         markerEnd: {
@@ -33599,7 +33603,7 @@
           color: activityByEdge[e.id] ? "#3fb950" : "#d18616"
         }
       })),
-      [activityByEdge, workflow.edges]
+      [activityByEdge, selectedEdgeId, workflow.edges]
     );
     const handleNodesChange = (0, import_react3.useCallback)(
       (changes) => {
@@ -33610,10 +33614,10 @@
           }
         }
         const sel = next.find((n) => n.selected);
-        if (sel && sel.id !== selectedNodeId) onSelect(sel.id);
-        else if (!sel && selectedNodeId) onSelect(null);
+        if (sel && sel.id !== selectedNodeId) onSelectNode(sel.id);
+        else if (!sel && selectedNodeId) onClearSelection();
       },
-      [flowNodes, onMove, onSelect, selectedNodeId]
+      [flowNodes, onClearSelection, onMove, onSelectNode, selectedNodeId]
     );
     const handleEdgesChange = (0, import_react3.useCallback)(
       (changes) => {
@@ -33639,8 +33643,11 @@
         onNodesChange: handleNodesChange,
         onEdgesChange: handleEdgesChange,
         onConnect: handleConnect,
-        onNodeClick: (_, n) => onSelect(n.id),
-        onPaneClick: () => onSelect(null),
+        onNodeClick: (_, n) => onSelectNode(n.id),
+        onEdgeClick: (_, edge) => onSelectEdge(edge.id),
+        onEdgeDoubleClick: (_, edge) => onRemoveEdge(edge.id),
+        onPaneClick: onClearSelection,
+        deleteKeyCode: ["Backspace", "Delete"],
         fitView: true,
         proOptions: { hideAttribution: true },
         children: [
@@ -34054,14 +34061,18 @@
     nodes: [],
     edges: []
   };
+  var EDGE_ACTIVITY_TTL_MS = 12e3;
+  var EDGE_ACTIVITY_TICK_MS = 1e3;
   function App() {
     const [workflow, setWorkflow] = (0, import_react7.useState)(EMPTY_WORKFLOW);
     const [view, setView] = (0, import_react7.useState)("graph");
     const [selectedNodeId, setSelectedNodeId] = (0, import_react7.useState)(null);
+    const [selectedEdgeId, setSelectedEdgeId] = (0, import_react7.useState)(null);
     const [agents, setAgents] = (0, import_react7.useState)([]);
     const [models, setModels] = (0, import_react7.useState)([]);
     const [ledger, setLedger] = (0, import_react7.useState)([]);
     const [status, setStatus] = (0, import_react7.useState)("");
+    const [nowMs, setNowMs] = (0, import_react7.useState)(() => Date.now());
     const [dirty, setDirty] = (0, import_react7.useState)(false);
     const initRef = (0, import_react7.useRef)(false);
     const workflowRef = (0, import_react7.useRef)(workflow);
@@ -34099,6 +34110,7 @@
             setModels(msg.models);
             break;
           case "ledger.append":
+            setNowMs(Date.now());
             setLedger((prev) => [...prev.slice(-499), msg.entry]);
             break;
           case "node.runResult":
@@ -34131,13 +34143,34 @@
       }, 700);
       return () => window.clearTimeout(timer2);
     }, [dirty, workflow]);
+    (0, import_react7.useEffect)(() => {
+      if (view !== "graph") return;
+      const timer2 = window.setInterval(() => setNowMs(Date.now()), EDGE_ACTIVITY_TICK_MS);
+      return () => window.clearInterval(timer2);
+    }, [view]);
     const selectedNode = (0, import_react7.useMemo)(
       () => selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null,
       [selectedNodeId, workflow]
     );
+    const selectedEdge = (0, import_react7.useMemo)(
+      () => selectedEdgeId ? workflow.edges.find((edge) => edge.id === selectedEdgeId) ?? null : null,
+      [selectedEdgeId, workflow]
+    );
     const activityByNode = (0, import_react7.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
-    const activityByEdge = (0, import_react7.useMemo)(() => buildEdgeActivity(workflow, ledger), [workflow, ledger]);
+    const activityByEdge = (0, import_react7.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
     const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
+    const selectNode = (id2) => {
+      setSelectedNodeId(id2);
+      setSelectedEdgeId(null);
+    };
+    const selectEdge = (id2) => {
+      setSelectedEdgeId(id2);
+      setSelectedNodeId(null);
+    };
+    const clearSelection = () => {
+      setSelectedNodeId(null);
+      setSelectedEdgeId(null);
+    };
     const updateNode = (next) => {
       setWorkflow((wf) => ({
         ...wf,
@@ -34157,7 +34190,7 @@
         enabled: true
       };
       setWorkflow((wf) => ({ ...wf, nodes: [...wf.nodes, newNode] }));
-      setSelectedNodeId(id2);
+      selectNode(id2);
       setDirty(true);
     };
     const deleteNode = (id2) => {
@@ -34166,7 +34199,7 @@
         nodes: wf.nodes.filter((n) => n.id !== id2),
         edges: wf.edges.filter((e) => e.from !== id2 && e.to !== id2)
       }));
-      setSelectedNodeId(null);
+      clearSelection();
       setDirty(true);
     };
     const addEdge2 = (from, to) => {
@@ -34179,6 +34212,7 @@
     };
     const removeEdge = (id2) => {
       setWorkflow((wf) => ({ ...wf, edges: wf.edges.filter((e) => e.id !== id2) }));
+      if (selectedEdgeId === id2) setSelectedEdgeId(null);
       setDirty(true);
     };
     const moveNode = (id2, x, y) => {
@@ -34231,7 +34265,10 @@
           activityByNode,
           activityByEdge,
           selectedNodeId,
-          onSelect: setSelectedNodeId,
+          selectedEdgeId,
+          onSelectNode: selectNode,
+          onSelectEdge: selectEdge,
+          onClearSelection: clearSelection,
           onMove: moveNode,
           onAddEdge: addEdge2,
           onRemoveEdge: removeEdge
@@ -34249,7 +34286,14 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity })
-      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
+      ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+        ConnectionPanel,
+        {
+          workflow,
+          edgeId: selectedEdge.id,
+          onDelete: () => removeEdge(selectedEdge.id)
+        }
+      ) : /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Workflow" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("label", { children: "Name" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
@@ -34299,6 +34343,27 @@
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: { marginTop: 16, opacity: 0.7, fontSize: 11 }, children: "Click a node to edit its fields. Drag from a node's right edge to another node to create an edge." })
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
+    ] });
+  }
+  function ConnectionPanel({
+    workflow,
+    edgeId,
+    onDelete
+  }) {
+    const edge = workflow.edges.find((candidate) => candidate.id === edgeId);
+    const fromNode = edge ? workflow.nodes.find((node) => node.id === edge.from) : null;
+    const toNode = edge ? workflow.nodes.find((node) => node.id === edge.to) : null;
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Connection" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+        "ID: ",
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("code", { children: edgeId })
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("label", { children: "From" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("input", { value: fromNode?.label ?? edge?.from ?? "", readOnly: true }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("label", { children: "To" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("input", { value: toNode?.label ?? edge?.to ?? "", readOnly: true }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "row", style: { marginTop: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { className: "danger", onClick: onDelete, children: "Delete connection" }) })
     ] });
   }
   function NodeActivityPanel({ activity }) {
@@ -34422,10 +34487,12 @@
         return null;
     }
   }
-  function buildEdgeActivity(workflow, entries) {
+  function buildEdgeActivity(workflow, entries, nowMs) {
     const activity = {};
     for (const entry of entries) {
       if (entry.type !== "handoff.emitted") continue;
+      const timestamp = Date.parse(entry.ts);
+      if (Number.isNaN(timestamp) || nowMs - timestamp > EDGE_ACTIVITY_TTL_MS) continue;
       const from = typeof entry.from === "string" ? entry.from : void 0;
       const to = typeof entry.to === "string" ? entry.to : void 0;
       if (!from || !to) continue;
