@@ -10,6 +10,7 @@ import { GhPrTrigger } from "./triggers/gh-pr-trigger.js";
 import { FileChangeTrigger } from "./triggers/file-change-trigger.js";
 import { StartupTrigger } from "./triggers/startup-trigger.js";
 import { DiagnosticsTrigger } from "./triggers/diagnostics-trigger.js";
+import { WebhookTrigger } from "./triggers/webhook-trigger.js";
 
 export class TriggerRegistry {
   private active = new Map<string, Trigger>();
@@ -79,6 +80,8 @@ export class TriggerRegistry {
         return new StartupTrigger(node, node.trigger, deps);
       case "diagnostics":
         return new DiagnosticsTrigger(node, node.trigger, this.p, this.bus, deps);
+      case "webhook":
+        return new WebhookTrigger(node, node.trigger, this.p, this.bus, deps);
       case "manual":
       default:
         return null;

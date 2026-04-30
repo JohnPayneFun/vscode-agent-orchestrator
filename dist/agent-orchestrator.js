@@ -8628,6 +8628,17 @@ var WORKFLOW_SCHEMA = {
                   severity: { enum: ["any", "error", "warning", "info", "hint"] },
                   debounceMs: { type: "integer", minimum: 100, maximum: 6e4 }
                 }
+              },
+              {
+                type: "object",
+                required: ["type", "path"],
+                properties: {
+                  type: { const: "webhook" },
+                  path: { type: "string", pattern: "^/[-a-zA-Z0-9_./]*$" },
+                  port: { type: "integer", minimum: 1024, maximum: 65535 },
+                  secretEnv: { type: ["string", "null"], minLength: 1 },
+                  secretHeader: { type: "string", minLength: 1 }
+                }
               }
             ]
           },

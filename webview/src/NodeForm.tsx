@@ -80,6 +80,7 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
         <option value="fileChange">File change</option>
         <option value="startup">Workspace start</option>
         <option value="diagnostics">Problems / diagnostics</option>
+        <option value="webhook">Webhook</option>
       </select>
 
       <TriggerFields trigger={node.trigger} onChange={setTrigger} />
@@ -277,6 +278,37 @@ function TriggerFields({
           />
         </>
       );
+    case "webhook":
+      return (
+        <>
+          <label>Path</label>
+          <input
+            value={trigger.path}
+            placeholder="/agent-orchestrator/security"
+            onChange={(e) => onChange({ ...trigger, path: e.target.value })}
+          />
+          <label>Port</label>
+          <input
+            type="number"
+            min={1024}
+            max={65535}
+            value={trigger.port ?? 8787}
+            onChange={(e) => onChange({ ...trigger, port: Number(e.target.value) || 8787 })}
+          />
+          <label>Secret env var (optional)</label>
+          <input
+            value={trigger.secretEnv ?? ""}
+            placeholder="AGENT_ORCHESTRATOR_WEBHOOK_SECRET"
+            onChange={(e) => onChange({ ...trigger, secretEnv: e.target.value || null })}
+          />
+          <label>Secret header</label>
+          <input
+            value={trigger.secretHeader ?? "x-agent-orchestrator-secret"}
+            placeholder="x-agent-orchestrator-secret"
+            onChange={(e) => onChange({ ...trigger, secretHeader: e.target.value || undefined })}
+          />
+        </>
+      );
     case "handoff":
     case "manual":
     default:
@@ -300,5 +332,7 @@ function defaultTrigger(type: TriggerType): TriggerConfig {
       return { type: "startup", delaySeconds: 3 };
     case "diagnostics":
       return { type: "diagnostics", glob: "src/**/*", severity: "error", debounceMs: 1000 };
+    case "webhook":
+      return { type: "webhook", path: "/agent-orchestrator/webhook", port: 8787, secretEnv: null };
   }
 }

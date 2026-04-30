@@ -33556,6 +33556,8 @@
         return "Workspace start";
       case "diagnostics":
         return `Problems \xB7 ${node.trigger.severity}`;
+      case "webhook":
+        return `Webhook \xB7 ${node.trigger.path}`;
     }
   }
   var nodeTypes = { persona: PersonaNode };
@@ -33787,7 +33789,8 @@
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "ghPr", children: "GitHub PR" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "fileChange", children: "File change" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "startup", children: "Workspace start" }),
-        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "diagnostics", children: "Problems / diagnostics" })
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "diagnostics", children: "Problems / diagnostics" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "webhook", children: "Webhook" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(TriggerFields, { trigger: node.trigger, onChange: setTrigger }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Context (system prompt \u2014 the persona's standing instructions)" }),
@@ -33986,6 +33989,47 @@
             }
           )
         ] });
+      case "webhook":
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Path" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              value: trigger.path,
+              placeholder: "/agent-orchestrator/security",
+              onChange: (e) => onChange({ ...trigger, path: e.target.value })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Port" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              type: "number",
+              min: 1024,
+              max: 65535,
+              value: trigger.port ?? 8787,
+              onChange: (e) => onChange({ ...trigger, port: Number(e.target.value) || 8787 })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret env var (optional)" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              value: trigger.secretEnv ?? "",
+              placeholder: "AGENT_ORCHESTRATOR_WEBHOOK_SECRET",
+              onChange: (e) => onChange({ ...trigger, secretEnv: e.target.value || null })
+            }
+          ),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret header" }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "input",
+            {
+              value: trigger.secretHeader ?? "x-agent-orchestrator-secret",
+              placeholder: "x-agent-orchestrator-secret",
+              onChange: (e) => onChange({ ...trigger, secretHeader: e.target.value || void 0 })
+            }
+          )
+        ] });
       case "handoff":
       case "manual":
       default:
@@ -34008,6 +34052,8 @@
         return { type: "startup", delaySeconds: 3 };
       case "diagnostics":
         return { type: "diagnostics", glob: "src/**/*", severity: "error", debounceMs: 1e3 };
+      case "webhook":
+        return { type: "webhook", path: "/agent-orchestrator/webhook", port: 8787, secretEnv: null };
     }
   }
 

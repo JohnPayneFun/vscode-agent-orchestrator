@@ -84,6 +84,8 @@ function describeTrigger(node: WorkflowNode): string {
       return "Workspace start";
     case "diagnostics":
       return `Problems · ${node.trigger.severity}`;
+    case "webhook":
+      return `Webhook · ${node.trigger.path}`;
   }
 }
 

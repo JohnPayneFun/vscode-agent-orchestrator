@@ -49,6 +49,20 @@ test("workflow schema accepts diagnostics triggers", () => {
   assert.equal(validate(workflow), true, formatErrors());
 });
 
+test("workflow schema accepts webhook triggers", () => {
+  const workflow = createWorkflow({
+    trigger: {
+      type: "webhook",
+      path: "/agent-orchestrator/security",
+      port: 8787,
+      secretEnv: "AGENT_ORCHESTRATOR_WEBHOOK_SECRET",
+      secretHeader: "x-agent-orchestrator-secret"
+    }
+  });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
 test("workflow schema accepts nodes without custom agents", () => {
   const workflow = createWorkflow({ agent: "" });
 

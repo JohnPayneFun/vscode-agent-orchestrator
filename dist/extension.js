@@ -5060,7 +5060,7 @@ var require_schemes = __commonJS({
       urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
       return urnComponent;
     }
-    var http = (
+    var http2 = (
       /** @type {SchemeHandler} */
       {
         scheme: "http",
@@ -5073,7 +5073,7 @@ var require_schemes = __commonJS({
       /** @type {SchemeHandler} */
       {
         scheme: "https",
-        domainHost: http.domainHost,
+        domainHost: http2.domainHost,
         parse: httpParse,
         serialize: httpSerialize
       }
@@ -5117,7 +5117,7 @@ var require_schemes = __commonJS({
     var SCHEMES = (
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
-        http,
+        http: http2,
         https,
         ws,
         wss,
@@ -16196,6 +16196,17 @@ var WORKFLOW_SCHEMA = {
                   severity: { enum: ["any", "error", "warning", "info", "hint"] },
                   debounceMs: { type: "integer", minimum: 100, maximum: 6e4 }
                 }
+              },
+              {
+                type: "object",
+                required: ["type", "path"],
+                properties: {
+                  type: { const: "webhook" },
+                  path: { type: "string", pattern: "^/[-a-zA-Z0-9_./]*$" },
+                  port: { type: "integer", minimum: 1024, maximum: 65535 },
+                  secretEnv: { type: ["string", "null"], minLength: 1 },
+                  secretHeader: { type: "string", minLength: 1 }
+                }
               }
             ]
           },
@@ -17085,6 +17096,206 @@ function escapeRegExp2(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// src/runtime/triggers/webhook-trigger.ts
+var http = __toESM(require("http"));
+var DEFAULT_WEBHOOK_PORT = 8787;
+var DEFAULT_SECRET_HEADER = "x-agent-orchestrator-secret";
+var MAX_BODY_BYTES = 1e6;
+var WebhookTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  unregister = null;
+  start() {
+    try {
+      this.unregister = WebhookServerRegistry.register({
+        node: this.node,
+        cfg: this.cfg,
+        p: this.p,
+        bus: this.bus,
+        deps: this.deps
+      });
+      const port = this.cfg.port ?? DEFAULT_WEBHOOK_PORT;
+      this.deps.log(`Webhook trigger for node ${this.node.id} listening on http://127.0.0.1:${port}${normalizeWebhookPath(this.cfg.path)}`);
+    } catch (err) {
+      this.deps.log(
+        `Webhook trigger for node ${this.node.id} failed to start: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+  dispose() {
+    this.unregister?.();
+    this.unregister = null;
+  }
+};
+var WebhookServerRegistry = class {
+  static servers = /* @__PURE__ */ new Map();
+  static register(registration) {
+    const port = registration.cfg.port ?? DEFAULT_WEBHOOK_PORT;
+    let server = this.servers.get(port);
+    if (!server) {
+      server = new WebhookServer(port);
+      this.servers.set(port, server);
+    }
+    return server.register(registration, () => {
+      if (server && server.routeCount === 0) {
+        server.close();
+        this.servers.delete(port);
+      }
+    });
+  }
+};
+var WebhookServer = class {
+  constructor(port) {
+    this.port = port;
+    this.server = http.createServer((request, response) => {
+      void this.handle(request, response);
+    });
+    this.server.listen(port, "127.0.0.1");
+  }
+  server;
+  routes = /* @__PURE__ */ new Map();
+  get routeCount() {
+    return this.routes.size;
+  }
+  register(registration, onEmpty) {
+    const routePath = normalizeWebhookPath(registration.cfg.path);
+    const existing = this.routes.get(routePath);
+    if (existing && existing.node.id !== registration.node.id) {
+      throw new Error(`Webhook path ${routePath} is already registered on port ${this.port}.`);
+    }
+    this.routes.set(routePath, registration);
+    return () => {
+      const current = this.routes.get(routePath);
+      if (current?.node.id === registration.node.id) this.routes.delete(routePath);
+      onEmpty();
+    };
+  }
+  close() {
+    this.server.close();
+  }
+  async handle(request, response) {
+    const url = new URL(request.url ?? "/", `http://127.0.0.1:${this.port}`);
+    const route = this.routes.get(normalizeWebhookPath(url.pathname));
+    if (!route) {
+      writeJson(response, 404, { ok: false, error: "No webhook route registered for this path." });
+      return;
+    }
+    if ((request.method ?? "GET").toUpperCase() !== "POST") {
+      writeJson(response, 405, { ok: false, error: "Webhook triggers accept POST requests only." });
+      return;
+    }
+    const auth = validateSecret(route.cfg, request.headers);
+    if (!auth.ok) {
+      writeJson(response, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    let body;
+    try {
+      body = await readRequestBody(request);
+    } catch (err) {
+      writeJson(response, 400, { ok: false, error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+    const payload = buildWebhookPayload({ request, url, body });
+    try {
+      const handoff = route.bus.buildPayload({
+        from: "external",
+        to: route.node.id,
+        edgeId: null,
+        trigger: { type: "webhook", path: route.cfg.path, port: route.cfg.port ?? DEFAULT_WEBHOOK_PORT },
+        payload
+      });
+      await route.bus.deliver(handoff);
+      await route.deps.fire(route.node, { path: payload.path, method: payload.method });
+      writeJson(response, 202, { ok: true, nodeId: route.node.id, handoffId: handoff.id });
+    } catch (err) {
+      route.deps.log(
+        `Webhook trigger fire for node ${route.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+      writeJson(response, 500, { ok: false, error: "Webhook trigger failed." });
+    }
+  }
+};
+function normalizeWebhookPath(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return "/webhook";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+function buildWebhookPayload(args) {
+  return {
+    method: (args.request.method ?? "POST").toUpperCase(),
+    path: normalizeWebhookPath(args.url.pathname),
+    query: queryToRecord(args.url.searchParams),
+    headers: headersToRecord(args.request.headers),
+    body: args.body,
+    receivedAt: args.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+async function readRequestBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BODY_BYTES) throw new Error("Webhook body is too large.");
+    chunks.push(buffer);
+  }
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw.trim()) return null;
+  const contentType = headerValue(request.headers["content-type"]);
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error("Webhook body is not valid JSON.");
+    }
+  }
+  return raw;
+}
+function validateSecret(cfg, headers) {
+  if (!cfg.secretEnv) return { ok: true };
+  const expected = process.env[cfg.secretEnv];
+  if (!expected) {
+    return { ok: false, status: 500, error: `Webhook secret environment variable ${cfg.secretEnv} is not set.` };
+  }
+  const headerName = (cfg.secretHeader || DEFAULT_SECRET_HEADER).toLocaleLowerCase();
+  const actual = headerValue(headers[headerName]);
+  if (actual !== expected) return { ok: false, status: 401, error: "Webhook secret did not match." };
+  return { ok: true };
+}
+function queryToRecord(searchParams) {
+  const out = {};
+  for (const key of new Set(searchParams.keys())) {
+    const values = searchParams.getAll(key);
+    out[key] = values.length === 1 ? values[0] : values;
+  }
+  return out;
+}
+function headersToRecord(headers) {
+  const out = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = headerValue(value);
+  }
+  return out;
+}
+function headerValue(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return value ?? "";
+}
+function writeJson(response, status, body) {
+  response.writeHead(status, { "Content-Type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
 // src/runtime/trigger-registry.ts
 var TriggerRegistry = class {
   constructor(dispatcher, p, bus, output) {
@@ -17149,6 +17360,8 @@ var TriggerRegistry = class {
         return new StartupTrigger(node, node.trigger, deps);
       case "diagnostics":
         return new DiagnosticsTrigger(node, node.trigger, this.p, this.bus, deps);
+      case "webhook":
+        return new WebhookTrigger(node, node.trigger, this.p, this.bus, deps);
       case "manual":
       default:
         return null;

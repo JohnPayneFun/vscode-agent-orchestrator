@@ -38,6 +38,29 @@ State lives in `.agent-orchestrator/` at the workspace root:
 | `fileChange` | A workspace file matching a glob is created, changed, or deleted |
 | `startup` | The workspace activates the extension, after an optional delay |
 | `diagnostics` | VS Code Problems/diagnostics change for matching files and severity |
+| `webhook` | A local HTTP `POST` request hits the node's configured path |
+
+Webhook triggers listen on `127.0.0.1` and default to port `8787`. Add an optional `secretEnv` to require a shared secret header before the node fires:
+
+```jsonc
+{
+    "type": "webhook",
+    "path": "/agent-orchestrator/security",
+    "port": 8787,
+    "secretEnv": "AGENT_ORCHESTRATOR_WEBHOOK_SECRET",
+    "secretHeader": "x-agent-orchestrator-secret"
+}
+```
+
+Smoke test with PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post `
+    -Uri http://127.0.0.1:8787/agent-orchestrator/security `
+    -Headers @{ "x-agent-orchestrator-secret" = $env:AGENT_ORCHESTRATOR_WEBHOOK_SECRET } `
+    -ContentType "application/json" `
+    -Body '{ "message": "review this external event" }'
+```
 
 ## Per-node model selection
 

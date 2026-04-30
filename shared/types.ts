@@ -8,7 +8,8 @@ export type TriggerType =
   | "manual"
   | "fileChange"
   | "startup"
-  | "diagnostics";
+  | "diagnostics"
+  | "webhook";
 
 export interface TriggerGhPr {
   type: "ghPr";
@@ -48,6 +49,14 @@ export interface TriggerDiagnostics {
   debounceMs?: number;
 }
 
+export interface TriggerWebhook {
+  type: "webhook";
+  path: string;
+  port?: number;
+  secretEnv?: string | null;
+  secretHeader?: string;
+}
+
 export type TriggerConfig =
   | TriggerGhPr
   | TriggerTimer
@@ -55,7 +64,8 @@ export type TriggerConfig =
   | TriggerManual
   | TriggerFileChange
   | TriggerStartup
-  | TriggerDiagnostics;
+  | TriggerDiagnostics
+  | TriggerWebhook;
 
 export interface NodePosition {
   x: number;
