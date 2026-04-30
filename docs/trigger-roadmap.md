@@ -40,6 +40,7 @@ This is the current trigger research shortlist, ordered by how much orchestratio
 ## Design Notes
 
 - Prefer generic trigger primitives first: webhook, file, git, command/check.
+- Keep cron for precise schedules, but expose simple interval timers for everyday “every N minutes/hours” workflows.
 - Keep provider-specific integrations as adapters so headless mode can reuse them.
 - Every trigger should produce a structured handoff payload before it fires the node.
 - Every trigger needs a validation path in the graph UI or CLI.

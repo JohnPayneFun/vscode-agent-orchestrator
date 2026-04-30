@@ -4,6 +4,7 @@
 export type TriggerType =
   | "ghPr"
   | "timer"
+  | "interval"
   | "handoff"
   | "manual"
   | "fileChange"
@@ -22,6 +23,13 @@ export interface TriggerTimer {
   type: "timer";
   cron: string;
   tz: "local" | "utc";
+}
+
+export interface TriggerInterval {
+  type: "interval";
+  every: number;
+  unit: "seconds" | "minutes" | "hours" | "days";
+  runOnStart?: boolean;
 }
 
 export interface TriggerHandoff {
@@ -60,6 +68,7 @@ export interface TriggerWebhook {
 export type TriggerConfig =
   | TriggerGhPr
   | TriggerTimer
+  | TriggerInterval
   | TriggerHandoff
   | TriggerManual
   | TriggerFileChange

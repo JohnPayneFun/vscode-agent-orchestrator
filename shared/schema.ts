@@ -59,6 +59,16 @@ export const WORKFLOW_SCHEMA = {
                   tz: { enum: ["local", "utc"] }
                 }
               },
+              {
+                type: "object",
+                required: ["type", "every", "unit"],
+                properties: {
+                  type: { const: "interval" },
+                  every: { type: "integer", minimum: 1, maximum: 100000 },
+                  unit: { enum: ["seconds", "minutes", "hours", "days"] },
+                  runOnStart: { type: "boolean" }
+                }
+              },
               { type: "object", required: ["type"], properties: { type: { const: "handoff" } } },
               { type: "object", required: ["type"], properties: { type: { const: "manual" } } },
               {

@@ -33,6 +33,7 @@ State lives in `.agent-orchestrator/` at the workspace root:
 |---|---|
 | `ghPr` | `gh pr list` polling (default 60s) detects a new or updated PR |
 | `timer` | A 5-field cron expression matches local (or UTC) time |
+| `interval` | A simple every-N-seconds/minutes/hours/days interval elapses |
 | `handoff` | A new file appears in this node's inbox |
 | `manual` | You click ▶ Run on the node, or type `@orchestrator /run <id>` |
 | `fileChange` | A workspace file matching a glob is created, changed, or deleted |

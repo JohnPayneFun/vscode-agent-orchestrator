@@ -5,6 +5,7 @@ import type { OrchestrationPaths } from "../orchestration/paths.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
 import type { Trigger, TriggerDeps } from "./triggers/types.js";
 import { TimerTrigger } from "./triggers/timer-trigger.js";
+import { IntervalTrigger } from "./triggers/interval-trigger.js";
 import { HandoffTrigger } from "./triggers/handoff-trigger.js";
 import { GhPrTrigger } from "./triggers/gh-pr-trigger.js";
 import { FileChangeTrigger } from "./triggers/file-change-trigger.js";
@@ -70,6 +71,8 @@ export class TriggerRegistry {
     switch (node.trigger.type) {
       case "timer":
         return new TimerTrigger(node, node.trigger, deps);
+      case "interval":
+        return new IntervalTrigger(node, node.trigger, deps);
       case "handoff":
         return new HandoffTrigger(node, this.p, deps);
       case "ghPr":

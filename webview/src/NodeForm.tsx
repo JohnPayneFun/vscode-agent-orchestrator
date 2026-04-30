@@ -75,6 +75,7 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
       <select value={node.trigger.type} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
         <option value="manual">Manual</option>
         <option value="handoff">New Message (handoff received)</option>
+        <option value="interval">Timer (simple interval)</option>
         <option value="timer">Timer (cron)</option>
         <option value="ghPr">GitHub PR</option>
         <option value="fileChange">File change</option>
@@ -224,6 +225,45 @@ function TriggerFields({
           </select>
         </>
       );
+    case "interval":
+      return (
+        <>
+          <div className="row">
+            <div>
+              <label>Every</label>
+              <input
+                type="number"
+                min={1}
+                value={trigger.every}
+                onChange={(e) => onChange({ ...trigger, every: Number(e.target.value) || 1 })}
+              />
+            </div>
+            <div>
+              <label>Unit</label>
+              <select
+                value={trigger.unit}
+                onChange={(e) => onChange({ ...trigger, unit: e.target.value as typeof trigger.unit })}
+              >
+                <option value="seconds">seconds</option>
+                <option value="minutes">minutes</option>
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+            </div>
+          </div>
+          <div className="row" style={{ marginTop: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input
+                type="checkbox"
+                checked={trigger.runOnStart ?? false}
+                style={{ width: "auto" }}
+                onChange={(e) => onChange({ ...trigger, runOnStart: e.target.checked })}
+              />
+              Run once when trigger starts
+            </label>
+          </div>
+        </>
+      );
     case "fileChange":
       return (
         <>
@@ -322,6 +362,8 @@ function defaultTrigger(type: TriggerType): TriggerConfig {
       return { type: "ghPr", repo: "owner/repo", events: ["opened", "synchronize"], branchFilter: null };
     case "timer":
       return { type: "timer", cron: "*/27 * * * *", tz: "local" };
+    case "interval":
+      return { type: "interval", every: 15, unit: "minutes", runOnStart: false };
     case "handoff":
       return { type: "handoff" };
     case "manual":

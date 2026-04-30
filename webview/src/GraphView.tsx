@@ -74,6 +74,8 @@ function describeTrigger(node: WorkflowNode): string {
       return `GH PR · ${node.trigger.repo}`;
     case "timer":
       return `Timer · ${node.trigger.cron}`;
+    case "interval":
+      return `Every ${node.trigger.every} ${node.trigger.every === 1 ? node.trigger.unit.replace(/s$/, "") : node.trigger.unit}`;
     case "handoff":
       return "New Message";
     case "manual":

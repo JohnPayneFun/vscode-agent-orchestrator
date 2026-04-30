@@ -35,6 +35,12 @@ test("workflow schema accepts fileChange triggers", () => {
   assert.equal(validate(workflow), true, formatErrors());
 });
 
+test("workflow schema accepts simple interval triggers", () => {
+  const workflow = createWorkflow({ trigger: { type: "interval", every: 2, unit: "hours", runOnStart: true } });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
 test("workflow schema accepts startup triggers", () => {
   const workflow = createWorkflow({ trigger: { type: "startup", delaySeconds: 5 } });
 

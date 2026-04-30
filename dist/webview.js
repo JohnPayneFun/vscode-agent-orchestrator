@@ -33546,6 +33546,8 @@
         return `GH PR \xB7 ${node.trigger.repo}`;
       case "timer":
         return `Timer \xB7 ${node.trigger.cron}`;
+      case "interval":
+        return `Every ${node.trigger.every} ${node.trigger.every === 1 ? node.trigger.unit.replace(/s$/, "") : node.trigger.unit}`;
       case "handoff":
         return "New Message";
       case "manual":
@@ -33785,6 +33787,7 @@
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("select", { value: node.trigger.type, onChange: (e) => setTriggerType(e.target.value), children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "manual", children: "Manual" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "handoff", children: "New Message (handoff received)" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "interval", children: "Timer (simple interval)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "timer", children: "Timer (cron)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "ghPr", children: "GitHub PR" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "fileChange", children: "File change" }),
@@ -33925,6 +33928,51 @@
             /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "utc", children: "utc" })
           ] })
         ] });
+      case "interval":
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Every" }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "input",
+                {
+                  type: "number",
+                  min: 1,
+                  value: trigger.every,
+                  onChange: (e) => onChange({ ...trigger, every: Number(e.target.value) || 1 })
+                }
+              )
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Unit" }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+                "select",
+                {
+                  value: trigger.unit,
+                  onChange: (e) => onChange({ ...trigger, unit: e.target.value }),
+                  children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "seconds", children: "seconds" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "minutes", children: "minutes" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hours", children: "hours" }),
+                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "days", children: "days" })
+                  ]
+                }
+              )
+            ] })
+          ] }),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 8 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                type: "checkbox",
+                checked: trigger.runOnStart ?? false,
+                style: { width: "auto" },
+                onChange: (e) => onChange({ ...trigger, runOnStart: e.target.checked })
+              }
+            ),
+            "Run once when trigger starts"
+          ] }) })
+        ] });
       case "fileChange":
         return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Glob pattern" }),
@@ -34042,6 +34090,8 @@
         return { type: "ghPr", repo: "owner/repo", events: ["opened", "synchronize"], branchFilter: null };
       case "timer":
         return { type: "timer", cron: "*/27 * * * *", tz: "local" };
+      case "interval":
+        return { type: "interval", every: 15, unit: "minutes", runOnStart: false };
       case "handoff":
         return { type: "handoff" };
       case "manual":

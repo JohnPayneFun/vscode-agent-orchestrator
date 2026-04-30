@@ -16172,6 +16172,16 @@ var WORKFLOW_SCHEMA = {
                   tz: { enum: ["local", "utc"] }
                 }
               },
+              {
+                type: "object",
+                required: ["type", "every", "unit"],
+                properties: {
+                  type: { const: "interval" },
+                  every: { type: "integer", minimum: 1, maximum: 1e5 },
+                  unit: { enum: ["seconds", "minutes", "hours", "days"] },
+                  runOnStart: { type: "boolean" }
+                }
+              },
               { type: "object", required: ["type"], properties: { type: { const: "handoff" } } },
               { type: "object", required: ["type"], properties: { type: { const: "manual" } } },
               {
@@ -16690,6 +16700,59 @@ var TimerTrigger = class {
     }, nextMs);
   }
 };
+
+// src/runtime/triggers/interval-trigger.ts
+var UNIT_MS = {
+  seconds: 1e3,
+  minutes: 6e4,
+  hours: 36e5,
+  days: 864e5
+};
+var IntervalTrigger = class {
+  constructor(node, cfg, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  interval = null;
+  disposed = false;
+  start() {
+    const intervalMs = intervalToMs(this.cfg);
+    if (this.cfg.runOnStart) {
+      void this.fire(intervalMs);
+    }
+    this.interval = setInterval(() => void this.fire(intervalMs), intervalMs);
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+  async fire(intervalMs) {
+    if (this.disposed) return;
+    try {
+      await this.deps.fire(this.node, {
+        every: this.cfg.every,
+        unit: this.cfg.unit,
+        intervalMs,
+        runOnStart: this.cfg.runOnStart ? 1 : 0
+      });
+    } catch (err) {
+      this.deps.log(
+        `Interval trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+function intervalToMs(cfg) {
+  const every = Math.max(1, Math.floor(cfg.every));
+  return every * UNIT_MS[cfg.unit];
+}
 
 // src/runtime/triggers/handoff-trigger.ts
 var vscode2 = __toESM(require("vscode"));
@@ -17350,6 +17413,8 @@ var TriggerRegistry = class {
     switch (node.trigger.type) {
       case "timer":
         return new TimerTrigger(node, node.trigger, deps);
+      case "interval":
+        return new IntervalTrigger(node, node.trigger, deps);
       case "handoff":
         return new HandoffTrigger(node, this.p, deps);
       case "ghPr":
