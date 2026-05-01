@@ -242,12 +242,7 @@ function createVsCodeModelProvider(
             const toolResults: vscode.LanguageModelToolResultPart[] = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
-              const result = await vscode.lm.invokeTool(
-                toolCall.name,
-                { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
-                token
-              );
-              toolResults.push(new vscode.LanguageModelToolResultPart(toolCall.callId, result.content));
+              toolResults.push(await invokeToolResultPart(toolCall, request, token, stream));
             }
             requestMessages.push(vscode.LanguageModelChatMessage.User(toolResults));
           }
@@ -256,6 +251,30 @@ function createVsCodeModelProvider(
       };
     }
   };
+}
+
+async function invokeToolResultPart(
+  toolCall: vscode.LanguageModelToolCallPart,
+  request: vscode.ChatRequest,
+  token: vscode.CancellationToken,
+  stream: vscode.ChatResponseStream
+): Promise<vscode.LanguageModelToolResultPart> {
+  try {
+    const result = await vscode.lm.invokeTool(
+      toolCall.name,
+      { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+      token
+    );
+    return new vscode.LanguageModelToolResultPart(toolCall.callId, result.content);
+  } catch (err) {
+    const message = toolErrorMessage(toolCall.name, err);
+    stream.progress(message);
+    return new vscode.LanguageModelToolResultPart(toolCall.callId, [new vscode.LanguageModelTextPart(message)]);
+  }
+}
+
+function toolErrorMessage(toolName: string, err: unknown): string {
+  return `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 
 function toLanguageModelChatTool(tool: vscode.LanguageModelToolInformation): vscode.LanguageModelChatTool {

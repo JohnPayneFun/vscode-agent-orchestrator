@@ -18083,12 +18083,7 @@ function createVsCodeModelProvider(request, stream, token) {
             const toolResults = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
-              const result = await vscode6.lm.invokeTool(
-                toolCall.name,
-                { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
-                token
-              );
-              toolResults.push(new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content));
+              toolResults.push(await invokeToolResultPart(toolCall, request, token, stream));
             }
             requestMessages.push(vscode6.LanguageModelChatMessage.User(toolResults));
           }
@@ -18097,6 +18092,23 @@ function createVsCodeModelProvider(request, stream, token) {
       };
     }
   };
+}
+async function invokeToolResultPart(toolCall, request, token, stream) {
+  try {
+    const result = await vscode6.lm.invokeTool(
+      toolCall.name,
+      { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+      token
+    );
+    return new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content);
+  } catch (err) {
+    const message = toolErrorMessage(toolCall.name, err);
+    stream.progress(message);
+    return new vscode6.LanguageModelToolResultPart(toolCall.callId, [new vscode6.LanguageModelTextPart(message)]);
+  }
+}
+function toolErrorMessage(toolName, err) {
+  return `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`;
 }
 function toLanguageModelChatTool(tool) {
   return {
