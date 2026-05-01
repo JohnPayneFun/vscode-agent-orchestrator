@@ -17907,6 +17907,7 @@ function findEdgeId(workflow, from, to) {
 var DEFAULT_TOOL_ROUND_LIMIT = 16;
 var MIN_TOOL_ROUND_LIMIT = 1;
 var MAX_TOOL_ROUND_LIMIT = 50;
+var REPEATED_TOOL_FAILURE_LIMIT = 2;
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18064,6 +18065,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = vscode6.lm.tools.map(toLanguageModelChatTool);
+          const failedToolCalls = /* @__PURE__ */ new Map();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
               requestMessages,
@@ -18086,7 +18088,17 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
             const toolResults = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
-              toolResults.push(await invokeToolResultPart(toolCall, request, token, stream));
+              const outcome = await invokeToolResultPart(toolCall, request, token, stream);
+              if (outcome.failureSignature) {
+                const failureCount = (failedToolCalls.get(outcome.failureSignature) ?? 0) + 1;
+                failedToolCalls.set(outcome.failureSignature, failureCount);
+                if (failureCount >= REPEATED_TOOL_FAILURE_LIMIT) {
+                  throw new Error(
+                    `${outcome.message} The same tool call failed ${failureCount} time(s), so the run was stopped to avoid a retry loop.`
+                  );
+                }
+              }
+              toolResults.push(outcome.resultPart);
             }
             requestMessages.push(vscode6.LanguageModelChatMessage.User(toolResults));
           }
@@ -18109,15 +18121,33 @@ async function invokeToolResultPart(toolCall, request, token, stream) {
       { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
       token
     );
-    return new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content);
+    return { resultPart: new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content) };
   } catch (err) {
     const message = toolErrorMessage(toolCall.name, err);
     stream.progress(message);
-    return new vscode6.LanguageModelToolResultPart(toolCall.callId, [new vscode6.LanguageModelTextPart(message)]);
+    return {
+      resultPart: new vscode6.LanguageModelToolResultPart(toolCall.callId, [new vscode6.LanguageModelTextPart(message)]),
+      failureSignature: `${toolCall.name}:${stableStringify(toolCall.input)}:${message}`,
+      message
+    };
   }
 }
 function toolErrorMessage(toolName, err) {
   return `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`;
+}
+function stableStringify(value) {
+  try {
+    return JSON.stringify(sortJsonValue(value));
+  } catch {
+    return String(value);
+  }
+}
+function sortJsonValue(value) {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  return Object.fromEntries(
+    Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(([key, item]) => [key, sortJsonValue(item)])
+  );
 }
 function toLanguageModelChatTool(tool) {
   return {

@@ -9,6 +9,7 @@ import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } f
 const DEFAULT_TOOL_ROUND_LIMIT = 16;
 const MIN_TOOL_ROUND_LIMIT = 1;
 const MAX_TOOL_ROUND_LIMIT = 50;
+const REPEATED_TOOL_FAILURE_LIMIT = 2;
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
@@ -224,6 +225,7 @@ function createVsCodeModelProvider(
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = vscode.lm.tools.map(toLanguageModelChatTool);
+          const failedToolCalls = new Map<string, number>();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
               requestMessages,
@@ -246,7 +248,17 @@ function createVsCodeModelProvider(
             const toolResults: vscode.LanguageModelToolResultPart[] = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
-              toolResults.push(await invokeToolResultPart(toolCall, request, token, stream));
+              const outcome = await invokeToolResultPart(toolCall, request, token, stream);
+              if (outcome.failureSignature) {
+                const failureCount = (failedToolCalls.get(outcome.failureSignature) ?? 0) + 1;
+                failedToolCalls.set(outcome.failureSignature, failureCount);
+                if (failureCount >= REPEATED_TOOL_FAILURE_LIMIT) {
+                  throw new Error(
+                    `${outcome.message} The same tool call failed ${failureCount} time(s), so the run was stopped to avoid a retry loop.`
+                  );
+                }
+              }
+              toolResults.push(outcome.resultPart);
             }
             requestMessages.push(vscode.LanguageModelChatMessage.User(toolResults));
           }
@@ -259,6 +271,12 @@ function createVsCodeModelProvider(
   };
 }
 
+interface ToolInvocationOutcome {
+  resultPart: vscode.LanguageModelToolResultPart;
+  failureSignature?: string;
+  message?: string;
+}
+
 function clampToolRoundLimit(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
   return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
@@ -269,23 +287,45 @@ async function invokeToolResultPart(
   request: vscode.ChatRequest,
   token: vscode.CancellationToken,
   stream: vscode.ChatResponseStream
-): Promise<vscode.LanguageModelToolResultPart> {
+): Promise<ToolInvocationOutcome> {
   try {
     const result = await vscode.lm.invokeTool(
       toolCall.name,
       { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
       token
     );
-    return new vscode.LanguageModelToolResultPart(toolCall.callId, result.content);
+    return { resultPart: new vscode.LanguageModelToolResultPart(toolCall.callId, result.content) };
   } catch (err) {
     const message = toolErrorMessage(toolCall.name, err);
     stream.progress(message);
-    return new vscode.LanguageModelToolResultPart(toolCall.callId, [new vscode.LanguageModelTextPart(message)]);
+    return {
+      resultPart: new vscode.LanguageModelToolResultPart(toolCall.callId, [new vscode.LanguageModelTextPart(message)]),
+      failureSignature: `${toolCall.name}:${stableStringify(toolCall.input)}:${message}`,
+      message
+    };
   }
 }
 
 function toolErrorMessage(toolName: string, err: unknown): string {
   return `Tool ${toolName} failed: ${err instanceof Error ? err.message : String(err)}`;
+}
+
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(sortJsonValue(value));
+  } catch {
+    return String(value);
+  }
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(sortJsonValue);
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, item]) => [key, sortJsonValue(item)])
+  );
 }
 
 function toLanguageModelChatTool(tool: vscode.LanguageModelToolInformation): vscode.LanguageModelChatTool {
