@@ -4,6 +4,7 @@ import type { Ledger } from "../orchestration/ledger.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { writeNodeFileArtifacts, type FileArtifactResult } from "./file-artifacts.js";
+import { takeRetryState } from "./retry-state.js";
 
 const TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
 const HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
@@ -54,6 +55,26 @@ export interface RunWorkflowNodeResult {
   fileArtifacts: FileArtifactResult[];
 }
 
+export class WorkflowNodeRunError extends Error {
+  readonly eventId: string;
+  readonly drainedHandoffs: HandoffPayload[];
+  readonly cleanedUserText: string;
+  readonly triggerType: string;
+
+  constructor(
+    message: string,
+    options: { cause: unknown; eventId: string; drainedHandoffs: HandoffPayload[]; cleanedUserText: string; triggerType: string }
+  ) {
+    super(message);
+    this.name = "WorkflowNodeRunError";
+    this.cause = options.cause;
+    this.eventId = options.eventId;
+    this.drainedHandoffs = options.drainedHandoffs;
+    this.cleanedUserText = options.cleanedUserText;
+    this.triggerType = options.triggerType;
+  }
+}
+
 type OutgoingHandoff = {
   target: string;
   payload: Record<string, unknown>;
@@ -70,11 +91,26 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
     await args.onMarkdown?.(markdown);
   };
 
-  const triggerMatch = userText.match(TRIGGER_TAG_RE);
-  const triggerType = triggerMatch?.[1] ?? "manual";
-  const cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
+  const triggerInfo = parseTriggerTag(userText);
+  let triggerType = triggerInfo.type;
+  let cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
 
-  const drained = await deps.bus.drain(node.id);
+  let drained = await deps.bus.drain(node.id);
+  const retryId = triggerInfo.detail.retryId;
+  if (retryId) {
+    const retryState = await takeRetryState(deps.paths, retryId);
+    if (retryState?.nodeId === node.id) {
+      triggerType = retryState.triggerType;
+      cleanedUserText = [retryState.userText, cleanedUserText].filter(Boolean).join("\n\n");
+      drained = [...retryState.drainedHandoffs, ...drained];
+      await deps.ledger.append({
+        type: "retry.restored",
+        node: node.id,
+        eventId,
+        detail: { retryId, drainedHandoffs: retryState.drainedHandoffs.length, retryAt: retryState.retryAt }
+      });
+    }
+  }
 
   await deps.ledger.append({
     type: "trigger.fired",
@@ -139,13 +175,14 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
       await emit(fragment);
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await deps.ledger.append({
       type: "session.errored",
       node: node.id,
       eventId,
-      error: err instanceof Error ? err.message : String(err)
+      error: message
     });
-    throw err;
+    throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
   }
 
   await deps.ledger.append({
@@ -260,6 +297,21 @@ async function writeArtifacts(args: {
     await args.emit(`\n\n**File write failed:** ${message}\n`);
     return [];
   }
+}
+
+function parseTriggerTag(userText: string): { type: string; detail: Record<string, string> } {
+  const match = userText.match(TRIGGER_TAG_RE);
+  return { type: match?.[1] ?? "manual", detail: parseTriggerDetail(match?.[2] ?? "") };
+}
+
+function parseTriggerDetail(raw: string): Record<string, string> {
+  const detail: Record<string, string> = {};
+  for (const part of raw.split(",")) {
+    const [key, ...rest] = part.split("=");
+    if (!key || rest.length === 0) continue;
+    detail[key.trim()] = rest.join("=").trim();
+  }
+  return detail;
 }
 
 function buildSystemMessage(

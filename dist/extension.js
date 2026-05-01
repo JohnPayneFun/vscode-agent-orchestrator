@@ -56,54 +56,54 @@ var require_polyfills = __commonJS({
     }
     var chdir;
     module2.exports = patch;
-    function patch(fs10) {
+    function patch(fs11) {
       if (constants.hasOwnProperty("O_SYMLINK") && process.version.match(/^v0\.6\.[0-2]|^v0\.5\./)) {
-        patchLchmod(fs10);
+        patchLchmod(fs11);
       }
-      if (!fs10.lutimes) {
-        patchLutimes(fs10);
+      if (!fs11.lutimes) {
+        patchLutimes(fs11);
       }
-      fs10.chown = chownFix(fs10.chown);
-      fs10.fchown = chownFix(fs10.fchown);
-      fs10.lchown = chownFix(fs10.lchown);
-      fs10.chmod = chmodFix(fs10.chmod);
-      fs10.fchmod = chmodFix(fs10.fchmod);
-      fs10.lchmod = chmodFix(fs10.lchmod);
-      fs10.chownSync = chownFixSync(fs10.chownSync);
-      fs10.fchownSync = chownFixSync(fs10.fchownSync);
-      fs10.lchownSync = chownFixSync(fs10.lchownSync);
-      fs10.chmodSync = chmodFixSync(fs10.chmodSync);
-      fs10.fchmodSync = chmodFixSync(fs10.fchmodSync);
-      fs10.lchmodSync = chmodFixSync(fs10.lchmodSync);
-      fs10.stat = statFix(fs10.stat);
-      fs10.fstat = statFix(fs10.fstat);
-      fs10.lstat = statFix(fs10.lstat);
-      fs10.statSync = statFixSync(fs10.statSync);
-      fs10.fstatSync = statFixSync(fs10.fstatSync);
-      fs10.lstatSync = statFixSync(fs10.lstatSync);
-      if (fs10.chmod && !fs10.lchmod) {
-        fs10.lchmod = function(path12, mode, cb) {
+      fs11.chown = chownFix(fs11.chown);
+      fs11.fchown = chownFix(fs11.fchown);
+      fs11.lchown = chownFix(fs11.lchown);
+      fs11.chmod = chmodFix(fs11.chmod);
+      fs11.fchmod = chmodFix(fs11.fchmod);
+      fs11.lchmod = chmodFix(fs11.lchmod);
+      fs11.chownSync = chownFixSync(fs11.chownSync);
+      fs11.fchownSync = chownFixSync(fs11.fchownSync);
+      fs11.lchownSync = chownFixSync(fs11.lchownSync);
+      fs11.chmodSync = chmodFixSync(fs11.chmodSync);
+      fs11.fchmodSync = chmodFixSync(fs11.fchmodSync);
+      fs11.lchmodSync = chmodFixSync(fs11.lchmodSync);
+      fs11.stat = statFix(fs11.stat);
+      fs11.fstat = statFix(fs11.fstat);
+      fs11.lstat = statFix(fs11.lstat);
+      fs11.statSync = statFixSync(fs11.statSync);
+      fs11.fstatSync = statFixSync(fs11.fstatSync);
+      fs11.lstatSync = statFixSync(fs11.lstatSync);
+      if (fs11.chmod && !fs11.lchmod) {
+        fs11.lchmod = function(path13, mode, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs10.lchmodSync = function() {
+        fs11.lchmodSync = function() {
         };
       }
-      if (fs10.chown && !fs10.lchown) {
-        fs10.lchown = function(path12, uid, gid, cb) {
+      if (fs11.chown && !fs11.lchown) {
+        fs11.lchown = function(path13, uid, gid, cb) {
           if (cb) process.nextTick(cb);
         };
-        fs10.lchownSync = function() {
+        fs11.lchownSync = function() {
         };
       }
       if (platform === "win32") {
-        fs10.rename = typeof fs10.rename !== "function" ? fs10.rename : function(fs$rename) {
+        fs11.rename = typeof fs11.rename !== "function" ? fs11.rename : function(fs$rename) {
           function rename(from, to, cb) {
             var start = Date.now();
             var backoff = 0;
             fs$rename(from, to, function CB(er) {
               if (er && (er.code === "EACCES" || er.code === "EPERM" || er.code === "EBUSY") && Date.now() - start < 6e4) {
                 setTimeout(function() {
-                  fs10.stat(to, function(stater, st) {
+                  fs11.stat(to, function(stater, st) {
                     if (stater && stater.code === "ENOENT")
                       fs$rename(from, to, CB);
                     else
@@ -119,9 +119,9 @@ var require_polyfills = __commonJS({
           }
           if (Object.setPrototypeOf) Object.setPrototypeOf(rename, fs$rename);
           return rename;
-        }(fs10.rename);
+        }(fs11.rename);
       }
-      fs10.read = typeof fs10.read !== "function" ? fs10.read : function(fs$read) {
+      fs11.read = typeof fs11.read !== "function" ? fs11.read : function(fs$read) {
         function read(fd, buffer, offset, length, position, callback_) {
           var callback;
           if (callback_ && typeof callback_ === "function") {
@@ -129,22 +129,22 @@ var require_polyfills = __commonJS({
             callback = function(er, _, __) {
               if (er && er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
-                return fs$read.call(fs10, fd, buffer, offset, length, position, callback);
+                return fs$read.call(fs11, fd, buffer, offset, length, position, callback);
               }
               callback_.apply(this, arguments);
             };
           }
-          return fs$read.call(fs10, fd, buffer, offset, length, position, callback);
+          return fs$read.call(fs11, fd, buffer, offset, length, position, callback);
         }
         if (Object.setPrototypeOf) Object.setPrototypeOf(read, fs$read);
         return read;
-      }(fs10.read);
-      fs10.readSync = typeof fs10.readSync !== "function" ? fs10.readSync : /* @__PURE__ */ function(fs$readSync) {
+      }(fs11.read);
+      fs11.readSync = typeof fs11.readSync !== "function" ? fs11.readSync : /* @__PURE__ */ function(fs$readSync) {
         return function(fd, buffer, offset, length, position) {
           var eagCounter = 0;
           while (true) {
             try {
-              return fs$readSync.call(fs10, fd, buffer, offset, length, position);
+              return fs$readSync.call(fs11, fd, buffer, offset, length, position);
             } catch (er) {
               if (er.code === "EAGAIN" && eagCounter < 10) {
                 eagCounter++;
@@ -154,11 +154,11 @@ var require_polyfills = __commonJS({
             }
           }
         };
-      }(fs10.readSync);
-      function patchLchmod(fs11) {
-        fs11.lchmod = function(path12, mode, callback) {
-          fs11.open(
-            path12,
+      }(fs11.readSync);
+      function patchLchmod(fs12) {
+        fs12.lchmod = function(path13, mode, callback) {
+          fs12.open(
+            path13,
             constants.O_WRONLY | constants.O_SYMLINK,
             mode,
             function(err, fd) {
@@ -166,80 +166,80 @@ var require_polyfills = __commonJS({
                 if (callback) callback(err);
                 return;
               }
-              fs11.fchmod(fd, mode, function(err2) {
-                fs11.close(fd, function(err22) {
+              fs12.fchmod(fd, mode, function(err2) {
+                fs12.close(fd, function(err22) {
                   if (callback) callback(err2 || err22);
                 });
               });
             }
           );
         };
-        fs11.lchmodSync = function(path12, mode) {
-          var fd = fs11.openSync(path12, constants.O_WRONLY | constants.O_SYMLINK, mode);
+        fs12.lchmodSync = function(path13, mode) {
+          var fd = fs12.openSync(path13, constants.O_WRONLY | constants.O_SYMLINK, mode);
           var threw = true;
           var ret;
           try {
-            ret = fs11.fchmodSync(fd, mode);
+            ret = fs12.fchmodSync(fd, mode);
             threw = false;
           } finally {
             if (threw) {
               try {
-                fs11.closeSync(fd);
+                fs12.closeSync(fd);
               } catch (er) {
               }
             } else {
-              fs11.closeSync(fd);
+              fs12.closeSync(fd);
             }
           }
           return ret;
         };
       }
-      function patchLutimes(fs11) {
-        if (constants.hasOwnProperty("O_SYMLINK") && fs11.futimes) {
-          fs11.lutimes = function(path12, at, mt, cb) {
-            fs11.open(path12, constants.O_SYMLINK, function(er, fd) {
+      function patchLutimes(fs12) {
+        if (constants.hasOwnProperty("O_SYMLINK") && fs12.futimes) {
+          fs12.lutimes = function(path13, at, mt, cb) {
+            fs12.open(path13, constants.O_SYMLINK, function(er, fd) {
               if (er) {
                 if (cb) cb(er);
                 return;
               }
-              fs11.futimes(fd, at, mt, function(er2) {
-                fs11.close(fd, function(er22) {
+              fs12.futimes(fd, at, mt, function(er2) {
+                fs12.close(fd, function(er22) {
                   if (cb) cb(er2 || er22);
                 });
               });
             });
           };
-          fs11.lutimesSync = function(path12, at, mt) {
-            var fd = fs11.openSync(path12, constants.O_SYMLINK);
+          fs12.lutimesSync = function(path13, at, mt) {
+            var fd = fs12.openSync(path13, constants.O_SYMLINK);
             var ret;
             var threw = true;
             try {
-              ret = fs11.futimesSync(fd, at, mt);
+              ret = fs12.futimesSync(fd, at, mt);
               threw = false;
             } finally {
               if (threw) {
                 try {
-                  fs11.closeSync(fd);
+                  fs12.closeSync(fd);
                 } catch (er) {
                 }
               } else {
-                fs11.closeSync(fd);
+                fs12.closeSync(fd);
               }
             }
             return ret;
           };
-        } else if (fs11.futimes) {
-          fs11.lutimes = function(_a, _b, _c, cb) {
+        } else if (fs12.futimes) {
+          fs12.lutimes = function(_a, _b, _c, cb) {
             if (cb) process.nextTick(cb);
           };
-          fs11.lutimesSync = function() {
+          fs12.lutimesSync = function() {
           };
         }
       }
       function chmodFix(orig) {
         if (!orig) return orig;
         return function(target, mode, cb) {
-          return orig.call(fs10, target, mode, function(er) {
+          return orig.call(fs11, target, mode, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -249,7 +249,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, mode) {
           try {
-            return orig.call(fs10, target, mode);
+            return orig.call(fs11, target, mode);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -258,7 +258,7 @@ var require_polyfills = __commonJS({
       function chownFix(orig) {
         if (!orig) return orig;
         return function(target, uid, gid, cb) {
-          return orig.call(fs10, target, uid, gid, function(er) {
+          return orig.call(fs11, target, uid, gid, function(er) {
             if (chownErOk(er)) er = null;
             if (cb) cb.apply(this, arguments);
           });
@@ -268,7 +268,7 @@ var require_polyfills = __commonJS({
         if (!orig) return orig;
         return function(target, uid, gid) {
           try {
-            return orig.call(fs10, target, uid, gid);
+            return orig.call(fs11, target, uid, gid);
           } catch (er) {
             if (!chownErOk(er)) throw er;
           }
@@ -288,13 +288,13 @@ var require_polyfills = __commonJS({
             }
             if (cb) cb.apply(this, arguments);
           }
-          return options ? orig.call(fs10, target, options, callback) : orig.call(fs10, target, callback);
+          return options ? orig.call(fs11, target, options, callback) : orig.call(fs11, target, callback);
         };
       }
       function statFixSync(orig) {
         if (!orig) return orig;
         return function(target, options) {
-          var stats = options ? orig.call(fs10, target, options) : orig.call(fs10, target);
+          var stats = options ? orig.call(fs11, target, options) : orig.call(fs11, target);
           if (stats) {
             if (stats.uid < 0) stats.uid += 4294967296;
             if (stats.gid < 0) stats.gid += 4294967296;
@@ -323,16 +323,16 @@ var require_legacy_streams = __commonJS({
   "node_modules/graceful-fs/legacy-streams.js"(exports2, module2) {
     var Stream = require("stream").Stream;
     module2.exports = legacy;
-    function legacy(fs10) {
+    function legacy(fs11) {
       return {
         ReadStream,
         WriteStream
       };
-      function ReadStream(path12, options) {
-        if (!(this instanceof ReadStream)) return new ReadStream(path12, options);
+      function ReadStream(path13, options) {
+        if (!(this instanceof ReadStream)) return new ReadStream(path13, options);
         Stream.call(this);
         var self2 = this;
-        this.path = path12;
+        this.path = path13;
         this.fd = null;
         this.readable = true;
         this.paused = false;
@@ -366,7 +366,7 @@ var require_legacy_streams = __commonJS({
           });
           return;
         }
-        fs10.open(this.path, this.flags, this.mode, function(err, fd) {
+        fs11.open(this.path, this.flags, this.mode, function(err, fd) {
           if (err) {
             self2.emit("error", err);
             self2.readable = false;
@@ -377,10 +377,10 @@ var require_legacy_streams = __commonJS({
           self2._read();
         });
       }
-      function WriteStream(path12, options) {
-        if (!(this instanceof WriteStream)) return new WriteStream(path12, options);
+      function WriteStream(path13, options) {
+        if (!(this instanceof WriteStream)) return new WriteStream(path13, options);
         Stream.call(this);
-        this.path = path12;
+        this.path = path13;
         this.fd = null;
         this.writable = true;
         this.flags = "w";
@@ -405,7 +405,7 @@ var require_legacy_streams = __commonJS({
         this.busy = false;
         this._queue = [];
         if (this.fd === null) {
-          this._open = fs10.open;
+          this._open = fs11.open;
           this._queue.push([this._open, this.path, this.flags, this.mode, void 0]);
           this.flush();
         }
@@ -440,7 +440,7 @@ var require_clone = __commonJS({
 // node_modules/graceful-fs/graceful-fs.js
 var require_graceful_fs = __commonJS({
   "node_modules/graceful-fs/graceful-fs.js"(exports2, module2) {
-    var fs10 = require("fs");
+    var fs11 = require("fs");
     var polyfills = require_polyfills();
     var legacy = require_legacy_streams();
     var clone = require_clone();
@@ -472,12 +472,12 @@ var require_graceful_fs = __commonJS({
         m = "GFS4: " + m.split(/\n/).join("\nGFS4: ");
         console.error(m);
       };
-    if (!fs10[gracefulQueue]) {
+    if (!fs11[gracefulQueue]) {
       queue = global[gracefulQueue] || [];
-      publishQueue(fs10, queue);
-      fs10.close = function(fs$close) {
+      publishQueue(fs11, queue);
+      fs11.close = function(fs$close) {
         function close(fd, cb) {
-          return fs$close.call(fs10, fd, function(err) {
+          return fs$close.call(fs11, fd, function(err) {
             if (!err) {
               resetQueue();
             }
@@ -489,48 +489,48 @@ var require_graceful_fs = __commonJS({
           value: fs$close
         });
         return close;
-      }(fs10.close);
-      fs10.closeSync = function(fs$closeSync) {
+      }(fs11.close);
+      fs11.closeSync = function(fs$closeSync) {
         function closeSync(fd) {
-          fs$closeSync.apply(fs10, arguments);
+          fs$closeSync.apply(fs11, arguments);
           resetQueue();
         }
         Object.defineProperty(closeSync, previousSymbol, {
           value: fs$closeSync
         });
         return closeSync;
-      }(fs10.closeSync);
+      }(fs11.closeSync);
       if (/\bgfs4\b/i.test(process.env.NODE_DEBUG || "")) {
         process.on("exit", function() {
-          debug(fs10[gracefulQueue]);
-          require("assert").equal(fs10[gracefulQueue].length, 0);
+          debug(fs11[gracefulQueue]);
+          require("assert").equal(fs11[gracefulQueue].length, 0);
         });
       }
     }
     var queue;
     if (!global[gracefulQueue]) {
-      publishQueue(global, fs10[gracefulQueue]);
+      publishQueue(global, fs11[gracefulQueue]);
     }
-    module2.exports = patch(clone(fs10));
-    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs10.__patched) {
-      module2.exports = patch(fs10);
-      fs10.__patched = true;
+    module2.exports = patch(clone(fs11));
+    if (process.env.TEST_GRACEFUL_FS_GLOBAL_PATCH && !fs11.__patched) {
+      module2.exports = patch(fs11);
+      fs11.__patched = true;
     }
-    function patch(fs11) {
-      polyfills(fs11);
-      fs11.gracefulify = patch;
-      fs11.createReadStream = createReadStream;
-      fs11.createWriteStream = createWriteStream;
-      var fs$readFile = fs11.readFile;
-      fs11.readFile = readFile;
-      function readFile(path12, options, cb) {
+    function patch(fs12) {
+      polyfills(fs12);
+      fs12.gracefulify = patch;
+      fs12.createReadStream = createReadStream;
+      fs12.createWriteStream = createWriteStream;
+      var fs$readFile = fs12.readFile;
+      fs12.readFile = readFile;
+      function readFile(path13, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$readFile(path12, options, cb);
-        function go$readFile(path13, options2, cb2, startTime) {
-          return fs$readFile(path13, options2, function(err) {
+        return go$readFile(path13, options, cb);
+        function go$readFile(path14, options2, cb2, startTime) {
+          return fs$readFile(path14, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$readFile, [path13, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$readFile, [path14, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -538,16 +538,16 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$writeFile = fs11.writeFile;
-      fs11.writeFile = writeFile;
-      function writeFile(path12, data, options, cb) {
+      var fs$writeFile = fs12.writeFile;
+      fs12.writeFile = writeFile;
+      function writeFile(path13, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$writeFile(path12, data, options, cb);
-        function go$writeFile(path13, data2, options2, cb2, startTime) {
-          return fs$writeFile(path13, data2, options2, function(err) {
+        return go$writeFile(path13, data, options, cb);
+        function go$writeFile(path14, data2, options2, cb2, startTime) {
+          return fs$writeFile(path14, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$writeFile, [path13, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$writeFile, [path14, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -555,17 +555,17 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$appendFile = fs11.appendFile;
+      var fs$appendFile = fs12.appendFile;
       if (fs$appendFile)
-        fs11.appendFile = appendFile;
-      function appendFile(path12, data, options, cb) {
+        fs12.appendFile = appendFile;
+      function appendFile(path13, data, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        return go$appendFile(path12, data, options, cb);
-        function go$appendFile(path13, data2, options2, cb2, startTime) {
-          return fs$appendFile(path13, data2, options2, function(err) {
+        return go$appendFile(path13, data, options, cb);
+        function go$appendFile(path14, data2, options2, cb2, startTime) {
+          return fs$appendFile(path14, data2, options2, function(err) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$appendFile, [path13, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$appendFile, [path14, data2, options2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -573,9 +573,9 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$copyFile = fs11.copyFile;
+      var fs$copyFile = fs12.copyFile;
       if (fs$copyFile)
-        fs11.copyFile = copyFile;
+        fs12.copyFile = copyFile;
       function copyFile(src, dest, flags, cb) {
         if (typeof flags === "function") {
           cb = flags;
@@ -593,34 +593,34 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      var fs$readdir = fs11.readdir;
-      fs11.readdir = readdir;
+      var fs$readdir = fs12.readdir;
+      fs12.readdir = readdir;
       var noReaddirOptionVersions = /^v[0-5]\./;
-      function readdir(path12, options, cb) {
+      function readdir(path13, options, cb) {
         if (typeof options === "function")
           cb = options, options = null;
-        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path13, options2, cb2, startTime) {
-          return fs$readdir(path13, fs$readdirCallback(
-            path13,
+        var go$readdir = noReaddirOptionVersions.test(process.version) ? function go$readdir2(path14, options2, cb2, startTime) {
+          return fs$readdir(path14, fs$readdirCallback(
+            path14,
             options2,
             cb2,
             startTime
           ));
-        } : function go$readdir2(path13, options2, cb2, startTime) {
-          return fs$readdir(path13, options2, fs$readdirCallback(
-            path13,
+        } : function go$readdir2(path14, options2, cb2, startTime) {
+          return fs$readdir(path14, options2, fs$readdirCallback(
+            path14,
             options2,
             cb2,
             startTime
           ));
         };
-        return go$readdir(path12, options, cb);
-        function fs$readdirCallback(path13, options2, cb2, startTime) {
+        return go$readdir(path13, options, cb);
+        function fs$readdirCallback(path14, options2, cb2, startTime) {
           return function(err, files) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
               enqueue([
                 go$readdir,
-                [path13, options2, cb2],
+                [path14, options2, cb2],
                 err,
                 startTime || Date.now(),
                 Date.now()
@@ -635,21 +635,21 @@ var require_graceful_fs = __commonJS({
         }
       }
       if (process.version.substr(0, 4) === "v0.8") {
-        var legStreams = legacy(fs11);
+        var legStreams = legacy(fs12);
         ReadStream = legStreams.ReadStream;
         WriteStream = legStreams.WriteStream;
       }
-      var fs$ReadStream = fs11.ReadStream;
+      var fs$ReadStream = fs12.ReadStream;
       if (fs$ReadStream) {
         ReadStream.prototype = Object.create(fs$ReadStream.prototype);
         ReadStream.prototype.open = ReadStream$open;
       }
-      var fs$WriteStream = fs11.WriteStream;
+      var fs$WriteStream = fs12.WriteStream;
       if (fs$WriteStream) {
         WriteStream.prototype = Object.create(fs$WriteStream.prototype);
         WriteStream.prototype.open = WriteStream$open;
       }
-      Object.defineProperty(fs11, "ReadStream", {
+      Object.defineProperty(fs12, "ReadStream", {
         get: function() {
           return ReadStream;
         },
@@ -659,7 +659,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      Object.defineProperty(fs11, "WriteStream", {
+      Object.defineProperty(fs12, "WriteStream", {
         get: function() {
           return WriteStream;
         },
@@ -670,7 +670,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileReadStream = ReadStream;
-      Object.defineProperty(fs11, "FileReadStream", {
+      Object.defineProperty(fs12, "FileReadStream", {
         get: function() {
           return FileReadStream;
         },
@@ -681,7 +681,7 @@ var require_graceful_fs = __commonJS({
         configurable: true
       });
       var FileWriteStream = WriteStream;
-      Object.defineProperty(fs11, "FileWriteStream", {
+      Object.defineProperty(fs12, "FileWriteStream", {
         get: function() {
           return FileWriteStream;
         },
@@ -691,7 +691,7 @@ var require_graceful_fs = __commonJS({
         enumerable: true,
         configurable: true
       });
-      function ReadStream(path12, options) {
+      function ReadStream(path13, options) {
         if (this instanceof ReadStream)
           return fs$ReadStream.apply(this, arguments), this;
         else
@@ -711,7 +711,7 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function WriteStream(path12, options) {
+      function WriteStream(path13, options) {
         if (this instanceof WriteStream)
           return fs$WriteStream.apply(this, arguments), this;
         else
@@ -729,22 +729,22 @@ var require_graceful_fs = __commonJS({
           }
         });
       }
-      function createReadStream(path12, options) {
-        return new fs11.ReadStream(path12, options);
+      function createReadStream(path13, options) {
+        return new fs12.ReadStream(path13, options);
       }
-      function createWriteStream(path12, options) {
-        return new fs11.WriteStream(path12, options);
+      function createWriteStream(path13, options) {
+        return new fs12.WriteStream(path13, options);
       }
-      var fs$open = fs11.open;
-      fs11.open = open;
-      function open(path12, flags, mode, cb) {
+      var fs$open = fs12.open;
+      fs12.open = open;
+      function open(path13, flags, mode, cb) {
         if (typeof mode === "function")
           cb = mode, mode = null;
-        return go$open(path12, flags, mode, cb);
-        function go$open(path13, flags2, mode2, cb2, startTime) {
-          return fs$open(path13, flags2, mode2, function(err, fd) {
+        return go$open(path13, flags, mode, cb);
+        function go$open(path14, flags2, mode2, cb2, startTime) {
+          return fs$open(path14, flags2, mode2, function(err, fd) {
             if (err && (err.code === "EMFILE" || err.code === "ENFILE"))
-              enqueue([go$open, [path13, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
+              enqueue([go$open, [path14, flags2, mode2, cb2], err, startTime || Date.now(), Date.now()]);
             else {
               if (typeof cb2 === "function")
                 cb2.apply(this, arguments);
@@ -752,20 +752,20 @@ var require_graceful_fs = __commonJS({
           });
         }
       }
-      return fs11;
+      return fs12;
     }
     function enqueue(elem) {
       debug("ENQUEUE", elem[0].name, elem[1]);
-      fs10[gracefulQueue].push(elem);
+      fs11[gracefulQueue].push(elem);
       retry();
     }
     var retryTimer;
     function resetQueue() {
       var now = Date.now();
-      for (var i = 0; i < fs10[gracefulQueue].length; ++i) {
-        if (fs10[gracefulQueue][i].length > 2) {
-          fs10[gracefulQueue][i][3] = now;
-          fs10[gracefulQueue][i][4] = now;
+      for (var i = 0; i < fs11[gracefulQueue].length; ++i) {
+        if (fs11[gracefulQueue][i].length > 2) {
+          fs11[gracefulQueue][i][3] = now;
+          fs11[gracefulQueue][i][4] = now;
         }
       }
       retry();
@@ -773,9 +773,9 @@ var require_graceful_fs = __commonJS({
     function retry() {
       clearTimeout(retryTimer);
       retryTimer = void 0;
-      if (fs10[gracefulQueue].length === 0)
+      if (fs11[gracefulQueue].length === 0)
         return;
-      var elem = fs10[gracefulQueue].shift();
+      var elem = fs11[gracefulQueue].shift();
       var fn = elem[0];
       var args = elem[1];
       var err = elem[2];
@@ -797,7 +797,7 @@ var require_graceful_fs = __commonJS({
           debug("RETRY", fn.name, args);
           fn.apply(null, args.concat([startTime]));
         } else {
-          fs10[gracefulQueue].push(elem);
+          fs11[gracefulQueue].push(elem);
         }
       }
       if (retryTimer === void 0) {
@@ -1232,10 +1232,10 @@ var require_mtime_precision = __commonJS({
   "node_modules/proper-lockfile/lib/mtime-precision.js"(exports2, module2) {
     "use strict";
     var cacheSymbol = Symbol();
-    function probe(file, fs10, callback) {
-      const cachedPrecision = fs10[cacheSymbol];
+    function probe(file, fs11, callback) {
+      const cachedPrecision = fs11[cacheSymbol];
       if (cachedPrecision) {
-        return fs10.stat(file, (err, stat) => {
+        return fs11.stat(file, (err, stat) => {
           if (err) {
             return callback(err);
           }
@@ -1243,16 +1243,16 @@ var require_mtime_precision = __commonJS({
         });
       }
       const mtime = new Date(Math.ceil(Date.now() / 1e3) * 1e3 + 5);
-      fs10.utimes(file, mtime, mtime, (err) => {
+      fs11.utimes(file, mtime, mtime, (err) => {
         if (err) {
           return callback(err);
         }
-        fs10.stat(file, (err2, stat) => {
+        fs11.stat(file, (err2, stat) => {
           if (err2) {
             return callback(err2);
           }
           const precision = stat.mtime.getTime() % 1e3 === 0 ? "s" : "ms";
-          Object.defineProperty(fs10, cacheSymbol, { value: precision });
+          Object.defineProperty(fs11, cacheSymbol, { value: precision });
           callback(null, stat.mtime, precision);
         });
       });
@@ -1273,8 +1273,8 @@ var require_mtime_precision = __commonJS({
 var require_lockfile = __commonJS({
   "node_modules/proper-lockfile/lib/lockfile.js"(exports2, module2) {
     "use strict";
-    var path12 = require("path");
-    var fs10 = require_graceful_fs();
+    var path13 = require("path");
+    var fs11 = require_graceful_fs();
     var retry = require_retry2();
     var onExit = require_signal_exit();
     var mtimePrecision = require_mtime_precision();
@@ -1284,7 +1284,7 @@ var require_lockfile = __commonJS({
     }
     function resolveCanonicalPath(file, options, callback) {
       if (!options.realpath) {
-        return callback(null, path12.resolve(file));
+        return callback(null, path13.resolve(file));
       }
       options.fs.realpath(file, callback);
     }
@@ -1405,7 +1405,7 @@ var require_lockfile = __commonJS({
         update: null,
         realpath: true,
         retries: 0,
-        fs: fs10,
+        fs: fs11,
         onCompromised: (err) => {
           throw err;
         },
@@ -1449,7 +1449,7 @@ var require_lockfile = __commonJS({
     }
     function unlock(file, options, callback) {
       options = {
-        fs: fs10,
+        fs: fs11,
         realpath: true,
         ...options
       };
@@ -1471,7 +1471,7 @@ var require_lockfile = __commonJS({
       options = {
         stale: 1e4,
         realpath: true,
-        fs: fs10,
+        fs: fs11,
         ...options
       };
       options.stale = Math.max(options.stale || 0, 2e3);
@@ -1510,16 +1510,16 @@ var require_lockfile = __commonJS({
 var require_adapter = __commonJS({
   "node_modules/proper-lockfile/lib/adapter.js"(exports2, module2) {
     "use strict";
-    var fs10 = require_graceful_fs();
-    function createSyncFs(fs11) {
+    var fs11 = require_graceful_fs();
+    function createSyncFs(fs12) {
       const methods = ["mkdir", "realpath", "stat", "rmdir", "utimes"];
-      const newFs = { ...fs11 };
+      const newFs = { ...fs12 };
       methods.forEach((method) => {
         newFs[method] = (...args) => {
           const callback = args.pop();
           let ret;
           try {
-            ret = fs11[`${method}Sync`](...args);
+            ret = fs12[`${method}Sync`](...args);
           } catch (err) {
             return callback(err);
           }
@@ -1557,7 +1557,7 @@ var require_adapter = __commonJS({
     }
     function toSyncOptions(options) {
       options = { ...options };
-      options.fs = createSyncFs(options.fs || fs10);
+      options.fs = createSyncFs(options.fs || fs11);
       if (typeof options.retries === "number" && options.retries > 0 || options.retries && typeof options.retries.retries === "number" && options.retries.retries > 0) {
         throw Object.assign(new Error("Cannot use retries with the sync api"), { code: "ESYNC" });
       }
@@ -4447,20 +4447,20 @@ var require_compile = __commonJS({
     var util_1 = require_util();
     var validate_1 = require_validate();
     var SchemaEnv = class {
-      constructor(env2) {
+      constructor(env3) {
         var _a;
         this.refs = {};
         this.dynamicAnchors = {};
         let schema;
-        if (typeof env2.schema == "object")
-          schema = env2.schema;
-        this.schema = env2.schema;
-        this.schemaId = env2.schemaId;
-        this.root = env2.root || this;
-        this.baseId = (_a = env2.baseId) !== null && _a !== void 0 ? _a : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env2.schemaId || "$id"]);
-        this.schemaPath = env2.schemaPath;
-        this.localRefs = env2.localRefs;
-        this.meta = env2.meta;
+        if (typeof env3.schema == "object")
+          schema = env3.schema;
+        this.schema = env3.schema;
+        this.schemaId = env3.schemaId;
+        this.root = env3.root || this;
+        this.baseId = (_a = env3.baseId) !== null && _a !== void 0 ? _a : (0, resolve_1.normalizeId)(schema === null || schema === void 0 ? void 0 : schema[env3.schemaId || "$id"]);
+        this.schemaPath = env3.schemaPath;
+        this.localRefs = env3.localRefs;
+        this.meta = env3.meta;
         this.$async = schema === null || schema === void 0 ? void 0 : schema.$async;
         this.refs = {};
       }
@@ -4644,15 +4644,15 @@ var require_compile = __commonJS({
           baseId = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schId);
         }
       }
-      let env2;
+      let env3;
       if (typeof schema != "boolean" && schema.$ref && !(0, util_1.schemaHasRulesButRef)(schema, this.RULES)) {
         const $ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, schema.$ref);
-        env2 = resolveSchema.call(this, root, $ref);
+        env3 = resolveSchema.call(this, root, $ref);
       }
       const { schemaId } = this.opts;
-      env2 = env2 || new SchemaEnv({ schema, schemaId, root, baseId });
-      if (env2.schema !== env2.root.schema)
-        return env2;
+      env3 = env3 || new SchemaEnv({ schema, schemaId, root, baseId });
+      if (env3.schema !== env3.root.schema)
+        return env3;
       return void 0;
     }
   }
@@ -4800,8 +4800,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path12) {
-      let input = path12;
+    function removeDotSegments(path13) {
+      let input = path13;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -5000,8 +5000,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path12, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path12 && path12 !== "/" ? path12 : void 0;
+        const [path13, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path13 && path13 !== "/" ? path13 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -6053,8 +6053,8 @@ var require_ref = __commonJS({
       schemaType: "string",
       code(cxt) {
         const { gen, schema: $ref, it } = cxt;
-        const { baseId, schemaEnv: env2, validateName, opts, self: self2 } = it;
-        const { root } = env2;
+        const { baseId, schemaEnv: env3, validateName, opts, self: self2 } = it;
+        const { root } = env3;
         if (($ref === "#" || $ref === "#/") && baseId === root.baseId)
           return callRootRef();
         const schOrEnv = compile_1.resolveRef.call(self2, root, baseId, $ref);
@@ -6064,8 +6064,8 @@ var require_ref = __commonJS({
           return callValidate(schOrEnv);
         return inlineRefSchema(schOrEnv);
         function callRootRef() {
-          if (env2 === root)
-            return callRef(cxt, validateName, env2, env2.$async);
+          if (env3 === root)
+            return callRef(cxt, validateName, env3, env3.$async);
           const rootName = gen.scopeValue("root", { ref: root });
           return callRef(cxt, (0, codegen_1._)`${rootName}.validate`, root, root.$async);
         }
@@ -6095,14 +6095,14 @@ var require_ref = __commonJS({
     exports2.getValidate = getValidate;
     function callRef(cxt, v, sch, $async) {
       const { gen, it } = cxt;
-      const { allErrors, schemaEnv: env2, opts } = it;
+      const { allErrors, schemaEnv: env3, opts } = it;
       const passCxt = opts.passContext ? names_1.default.this : codegen_1.nil;
       if ($async)
         callAsyncRef();
       else
         callSyncRef();
       function callAsyncRef() {
-        if (!env2.$async)
+        if (!env3.$async)
           throw new Error("async schema referenced by sync schema");
         const valid = gen.let("valid");
         gen.try(() => {
@@ -8188,7 +8188,7 @@ var require_index_umd = __commonJS({
         if (!currPrng) {
           currPrng = detectPrng();
         }
-        return function ulid4(seedTime) {
+        return function ulid5(seedTime) {
           if (isNaN(seedTime)) {
             seedTime = Date.now();
           }
@@ -8201,7 +8201,7 @@ var require_index_umd = __commonJS({
         }
         let lastTime = 0;
         let lastRandom;
-        return function ulid4(seedTime) {
+        return function ulid5(seedTime) {
           if (isNaN(seedTime)) {
             seedTime = Date.now();
           }
@@ -8214,7 +8214,7 @@ var require_index_umd = __commonJS({
           return encodeTime(seedTime, TIME_LEN) + newRandom;
         };
       }
-      const ulid3 = factory();
+      const ulid4 = factory();
       exports3.decodeTime = decodeTime;
       exports3.detectPrng = detectPrng;
       exports3.encodeRandom = encodeRandom;
@@ -8224,7 +8224,7 @@ var require_index_umd = __commonJS({
       exports3.monotonicFactory = monotonicFactory;
       exports3.randomChar = randomChar;
       exports3.replaceCharAt = replaceCharAt;
-      exports3.ulid = ulid3;
+      exports3.ulid = ulid4;
     });
   }
 });
@@ -16012,15 +16012,15 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode8 = __toESM(require("vscode"));
+var vscode9 = __toESM(require("vscode"));
 
 // src/orchestration/paths.ts
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs"));
 function workspaceRoot() {
   const moduleName = "vscode";
-  const vscode9 = require(moduleName);
-  const folder = vscode9.workspace.workspaceFolders?.[0];
+  const vscode10 = require(moduleName);
+  const folder = vscode10.workspace.workspaceFolders?.[0];
   return folder?.uri.fsPath;
 }
 function paths(root) {
@@ -16035,7 +16035,8 @@ function paths(root) {
     ledgerJsonl: path.join(orch, "ledger.jsonl"),
     triggersStateJson: path.join(orch, "triggers", "state.json"),
     runtimeRoot: runtime,
-    schemaJson: path.join(runtime, "workflow.schema.json")
+    schemaJson: path.join(runtime, "workflow.schema.json"),
+    retriesRoot: path.join(runtime, "retries")
   };
 }
 async function ensureDirs(p) {
@@ -16044,7 +16045,8 @@ async function ensureDirs(p) {
     p.inboxRoot,
     p.outboxRoot,
     path.dirname(p.triggersStateJson),
-    p.runtimeRoot
+    p.runtimeRoot,
+    p.retriesRoot
   ];
   for (const d of dirs) {
     await fs.promises.mkdir(d, { recursive: true });
@@ -16580,6 +16582,50 @@ function normalize(value) {
 
 // src/runtime/dispatcher.ts
 var vscode = __toESM(require("vscode"));
+
+// src/runtime/downstream-state.ts
+function scheduledDispatchDownstreamState(workflow, node, trigger, entries) {
+  if (!isScheduledTrigger(trigger)) return { busy: false, downstream: [] };
+  const targets = workflow.edges.filter((edge) => edge.from === node.id).map((edge) => edge.to);
+  const downstream = targets.map((nodeId) => ({ nodeId, status: latestNodeStatus(entries, nodeId) }));
+  return { busy: downstream.some((target) => target.status === "running"), downstream };
+}
+function isScheduledTrigger(trigger) {
+  return trigger === "timer" || trigger === "interval";
+}
+function latestNodeStatus(entries, nodeId) {
+  let status = "idle";
+  for (const entry of entries) {
+    const node = typeof entry.node === "string" ? entry.node : void 0;
+    const to = typeof entry.to === "string" ? entry.to : void 0;
+    const from = typeof entry.from === "string" ? entry.from : void 0;
+    switch (entry.type) {
+      case "handoff.delivered":
+        if (to === nodeId) status = "queued";
+        break;
+      case "trigger.fired":
+      case "handoff.consumed":
+      case "retry.restored":
+        if (node === nodeId) status = "running";
+        break;
+      case "session.spawned":
+        if (node === nodeId) status = "completed";
+        break;
+      case "session.errored":
+        if (node === nodeId) status = "errored";
+        break;
+      case "guardrail.tripped":
+        if (node === nodeId) status = "blocked";
+        break;
+      case "handoff.emitted":
+        if (from === nodeId) status = "completed";
+        break;
+    }
+  }
+  return status;
+}
+
+// src/runtime/dispatcher.ts
 var CHAT_PARTICIPANT_NAME = "@orchestrator";
 var Dispatcher = class {
   constructor(ledger, getWorkflow) {
@@ -16599,6 +16645,23 @@ var Dispatcher = class {
       return;
     }
     const wf = this.getWorkflow();
+    if (wf) {
+      const downstreamState = scheduledDispatchDownstreamState(wf, node, ctx.reason, await this.ledger.tail(1e3));
+      if (downstreamState.busy) {
+        await this.ledger.append({
+          type: "guardrail.tripped",
+          rule: "downstream-running",
+          node: node.id,
+          trigger: ctx.reason,
+          eventId: ctx.rootEventId,
+          detail: {
+            action: "deferred-to-next-tick",
+            downstream: downstreamState.downstream.filter((target) => target.status === "running")
+          }
+        });
+        return;
+      }
+    }
     if (wf && this.inFlight >= wf.settings.concurrencyLimit) {
       await this.ledger.append({
         type: "guardrail.tripped",
@@ -17483,10 +17546,10 @@ var TriggerRegistry = class {
 };
 
 // src/runtime/chat-participant.ts
-var vscode6 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 
 // src/runtime/node-runner.ts
-var import_ulid2 = __toESM(require_index_umd());
+var import_ulid3 = __toESM(require_index_umd());
 
 // src/runtime/file-artifacts.ts
 var fs8 = __toESM(require("fs"));
@@ -17588,21 +17651,96 @@ function slug(value) {
   return value.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "node";
 }
 
+// src/runtime/retry-state.ts
+var fs9 = __toESM(require("fs"));
+var path11 = __toESM(require("path"));
+var import_ulid2 = __toESM(require_index_umd());
+async function saveRetryState(p, state) {
+  const retryState = {
+    schemaVersion: 1,
+    id: (0, import_ulid2.ulid)(),
+    createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+    ...state
+  };
+  await fs9.promises.mkdir(p.retriesRoot, { recursive: true });
+  await fs9.promises.writeFile(retryStatePath(p, retryState.id), JSON.stringify(retryState, null, 2), "utf8");
+  return retryState;
+}
+async function takeRetryState(p, id) {
+  const fullPath = retryStatePath(p, id);
+  try {
+    const raw = await fs9.promises.readFile(fullPath, "utf8");
+    await fs9.promises.unlink(fullPath).catch(() => void 0);
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+async function listRetryStates(p) {
+  try {
+    const files = (await fs9.promises.readdir(p.retriesRoot)).filter((file) => file.endsWith(".json")).sort();
+    const states = [];
+    for (const file of files) {
+      try {
+        const raw = await fs9.promises.readFile(path11.join(p.retriesRoot, file), "utf8");
+        states.push(JSON.parse(raw));
+      } catch {
+      }
+    }
+    return states;
+  } catch {
+    return [];
+  }
+}
+function retryStatePath(p, id) {
+  return path11.join(p.retriesRoot, `${id}.json`);
+}
+
 // src/runtime/node-runner.ts
 var TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
 var HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
+var WorkflowNodeRunError = class extends Error {
+  eventId;
+  drainedHandoffs;
+  cleanedUserText;
+  triggerType;
+  constructor(message, options) {
+    super(message);
+    this.name = "WorkflowNodeRunError";
+    this.cause = options.cause;
+    this.eventId = options.eventId;
+    this.drainedHandoffs = options.drainedHandoffs;
+    this.cleanedUserText = options.cleanedUserText;
+    this.triggerType = options.triggerType;
+  }
+};
 async function runWorkflowNode(args) {
   const { deps, node, userText = "", history = [] } = args;
-  const eventId = (0, import_ulid2.ulid)();
+  const eventId = (0, import_ulid3.ulid)();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
   const emit = async (markdown) => {
     await args.onMarkdown?.(markdown);
   };
-  const triggerMatch = userText.match(TRIGGER_TAG_RE);
-  const triggerType = triggerMatch?.[1] ?? "manual";
-  const cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
-  const drained = await deps.bus.drain(node.id);
+  const triggerInfo = parseTriggerTag(userText);
+  let triggerType = triggerInfo.type;
+  let cleanedUserText = userText.replace(TRIGGER_TAG_RE, "").trim();
+  let drained = await deps.bus.drain(node.id);
+  const retryId = triggerInfo.detail.retryId;
+  if (retryId) {
+    const retryState = await takeRetryState(deps.paths, retryId);
+    if (retryState?.nodeId === node.id) {
+      triggerType = retryState.triggerType;
+      cleanedUserText = [retryState.userText, cleanedUserText].filter(Boolean).join("\n\n");
+      drained = [...retryState.drainedHandoffs, ...drained];
+      await deps.ledger.append({
+        type: "retry.restored",
+        node: node.id,
+        eventId,
+        detail: { retryId, drainedHandoffs: retryState.drainedHandoffs.length, retryAt: retryState.retryAt }
+      });
+    }
+  }
   await deps.ledger.append({
     type: "trigger.fired",
     eventId,
@@ -17663,13 +17801,14 @@ async function runWorkflowNode(args) {
       await emit(fragment);
     }
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await deps.ledger.append({
       type: "session.errored",
       node: node.id,
       eventId,
-      error: err instanceof Error ? err.message : String(err)
+      error: message
     });
-    throw err;
+    throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
   }
   await deps.ledger.append({
     type: "session.spawned",
@@ -17783,6 +17922,19 @@ ${fileArtifacts.map((artifact) => `  -> \`${artifact.path}\``).join("\n")}
 `);
     return [];
   }
+}
+function parseTriggerTag(userText) {
+  const match = userText.match(TRIGGER_TAG_RE);
+  return { type: match?.[1] ?? "manual", detail: parseTriggerDetail(match?.[2] ?? "") };
+}
+function parseTriggerDetail(raw) {
+  const detail = {};
+  for (const part of raw.split(",")) {
+    const [key, ...rest] = part.split("=");
+    if (!key || rest.length === 0) continue;
+    detail[key.trim()] = rest.join("=").trim();
+  }
+  return detail;
 }
 function buildSystemMessage(node, inboxRoot, agentInstructions) {
   const lines = [];
@@ -17904,6 +18056,60 @@ function findEdgeId(workflow, from, to) {
   return workflow.edges.find((edge) => edge.from === from && edge.to === to)?.id ?? null;
 }
 
+// src/runtime/retry-chat.ts
+var vscode6 = __toESM(require("vscode"));
+var CHAT_PARTICIPANT_NAME2 = "@orchestrator";
+function retryQuery(nodeId, retryId) {
+  return `${CHAT_PARTICIPANT_NAME2} /run ${nodeId} [triggered:manual:retryId=${retryId},usageLimitRetry=1]`;
+}
+function scheduleRetryChat(context, query, delayMs) {
+  const timeout = setTimeout(() => {
+    void openRetryChat(query);
+  }, Math.max(0, delayMs));
+  context.subscriptions.push({ dispose: () => clearTimeout(timeout) });
+}
+async function openRetryChat(query) {
+  try {
+    await vscode6.commands.executeCommand("workbench.action.chat.open", { query });
+  } catch {
+    try {
+      await vscode6.commands.executeCommand("workbench.action.chat.open");
+    } catch {
+    }
+    try {
+      await vscode6.env.clipboard.writeText(query);
+    } catch {
+    }
+    vscode6.window.showWarningMessage("Agent Orchestrator: usage-limit retry is ready. The retry query was copied to the clipboard.");
+  }
+}
+
+// src/runtime/usage-limit.ts
+var USAGE_LIMIT_RE = /(usage limit|rate limit|quota|too many requests|try again)/i;
+var TRY_AGAIN_RE = /try again in\s*(?:~|about|approximately)?\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|hr|hrs)\b/i;
+var ONE_MINUTE_MS = 6e4;
+function parseUsageLimitRetry(message, now = /* @__PURE__ */ new Date()) {
+  if (!USAGE_LIMIT_RE.test(message)) return null;
+  const match = message.match(TRY_AGAIN_RE);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const waitMs = Math.ceil(amount * unitToMs(match[2] ?? "minutes"));
+  const retryDelayMs = Math.max(ONE_MINUTE_MS, waitMs + ONE_MINUTE_MS);
+  return {
+    waitMs,
+    retryDelayMs,
+    retryAt: new Date(now.getTime() + retryDelayMs).toISOString(),
+    matchedText: match[0]
+  };
+}
+function unitToMs(unit) {
+  const normalized = unit.toLowerCase();
+  if (normalized.startsWith("sec")) return 1e3;
+  if (normalized.startsWith("hour") || normalized === "hr" || normalized === "hrs") return 60 * ONE_MINUTE_MS;
+  return ONE_MINUTE_MS;
+}
+
 // src/runtime/chat-participant.ts
 var DEFAULT_TOOL_ROUND_LIMIT = 16;
 var MIN_TOOL_ROUND_LIMIT = 1;
@@ -17963,7 +18169,7 @@ function registerChatParticipant(context, deps) {
         stream.markdown(`Node \`${formatNodeReference(node)}\` is disabled. Enable it in the graph editor first.`);
         return {};
       }
-      return await runNode({ deps, node, request, ctx, stream, token, userText });
+      return await runNode({ context, deps, node, request, ctx, stream, token, userText });
     } catch (err) {
       stream.markdown(
         `**Orchestrator error:** ${err instanceof Error ? err.message : String(err)}`
@@ -17975,8 +18181,8 @@ function registerChatParticipant(context, deps) {
       return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
     }
   };
-  const participant = vscode6.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
-  participant.iconPath = new vscode6.ThemeIcon("organization");
+  const participant = vscode7.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
+  participant.iconPath = new vscode7.ThemeIcon("organization");
   context.subscriptions.push(participant);
   return participant;
 }
@@ -18019,8 +18225,8 @@ function promptEquals(left, right) {
   return left.localeCompare(right, void 0, { sensitivity: "accent" }) === 0;
 }
 async function runNode(args) {
-  const { deps, node, request, ctx, stream, token, userText } = args;
-  const config = vscode6.workspace.getConfiguration("vscodeAgentOrchestrator");
+  const { context, deps, node, request, ctx, stream, token, userText } = args;
+  const config = vscode7.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = clampToolRoundLimit(config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   try {
     const result = await runWorkflowNode({
@@ -18035,7 +18241,9 @@ async function runNode(args) {
     });
     return { metadata: { nodeId: result.nodeId, eventId: result.eventId, handoffsEmitted: result.handoffsEmitted } };
   } catch (err) {
-    if (err instanceof vscode6.LanguageModelError) {
+    const scheduledRetry = await scheduleUsageLimitRetry({ context, deps, node, err, stream });
+    if (scheduledRetry) return { metadata: { nodeId: node.id, retryId: scheduledRetry.retryId, retryAt: scheduledRetry.retryAt } };
+    if (err instanceof vscode7.LanguageModelError) {
       stream.markdown(
         `
 
@@ -18049,12 +18257,57 @@ Check that you've selected a model in the chat picker and that you have access (
     }
   }
 }
+async function scheduleUsageLimitRetry(args) {
+  const message = errorMessage(args.err);
+  const retry = parseUsageLimitRetry(message);
+  if (!retry) return null;
+  const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
+  const retryState = await saveRetryState(args.deps.paths, {
+    retryAt: retry.retryAt,
+    nodeId: args.node.id,
+    triggerType: runError?.triggerType ?? "manual",
+    userText: runError?.cleanedUserText ?? "",
+    drainedHandoffs: runError?.drainedHandoffs ?? [],
+    reason: message
+  });
+  scheduleRetryChat(args.context, retryQuery(args.node.id, retryState.id), retry.retryDelayMs);
+  await args.deps.ledger.append({
+    type: "retry.scheduled",
+    node: args.node.id,
+    eventId: runError?.eventId,
+    detail: {
+      retryId: retryState.id,
+      retryAt: retry.retryAt,
+      waitMs: retry.waitMs,
+      retryDelayMs: retry.retryDelayMs,
+      matchedText: retry.matchedText,
+      drainedHandoffs: retryState.drainedHandoffs.length
+    }
+  });
+  args.stream.markdown(
+    `
+
+**Usage limit hit.** Scheduled \`${formatNodeReference(args.node)}\` to retry at ${new Date(retry.retryAt).toLocaleString()} after ${formatRetryDelay(retry.retryDelayMs)}.
+`
+  );
+  return { retryId: retryState.id, retryAt: retry.retryAt };
+}
+function errorMessage(err) {
+  return err instanceof Error ? err.message : String(err);
+}
+function formatRetryDelay(ms) {
+  const minutes = Math.ceil(ms / 6e4);
+  if (minutes < 60) return `${minutes} minute(s)`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours} hour(s) ${remainder} minute(s)` : `${hours} hour(s)`;
+}
 function chatHistoryToRuntimeMessages(ctx) {
   const messages = [];
   for (const turn of ctx.history) {
-    if (turn instanceof vscode6.ChatRequestTurn) {
+    if (turn instanceof vscode7.ChatRequestTurn) {
       messages.push({ role: "user", content: turn.prompt });
-    } else if (turn instanceof vscode6.ChatResponseTurn) {
+    } else if (turn instanceof vscode7.ChatResponseTurn) {
       const text = chatResponseTurnToText(turn);
       if (text) messages.push({ role: "assistant", content: text });
     }
@@ -18083,16 +18336,16 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
             const assistantParts = [];
             const toolCalls = [];
             for await (const part of response.stream) {
-              if (part instanceof vscode6.LanguageModelTextPart) {
+              if (part instanceof vscode7.LanguageModelTextPart) {
                 assistantParts.push(part);
                 yield part.value;
-              } else if (part instanceof vscode6.LanguageModelToolCallPart) {
+              } else if (part instanceof vscode7.LanguageModelToolCallPart) {
                 assistantParts.push(part);
                 toolCalls.push(part);
               }
             }
             if (toolCalls.length === 0) return;
-            requestMessages.push(vscode6.LanguageModelChatMessage.Assistant(assistantParts));
+            requestMessages.push(vscode7.LanguageModelChatMessage.Assistant(assistantParts));
             const toolResults = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
@@ -18108,7 +18361,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
               }
               toolResults.push(outcome.resultPart);
             }
-            requestMessages.push(vscode6.LanguageModelChatMessage.User(toolResults));
+            requestMessages.push(vscode7.LanguageModelChatMessage.User(toolResults));
           }
           throw new Error(
             `Stopped after ${toolRoundLimit} tool round(s). The model kept requesting tools, so the run did not complete.`
@@ -18119,7 +18372,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
   };
 }
 function exposedTools() {
-  return vscode6.lm.tools.filter((tool) => !isBlockedTool(tool));
+  return vscode7.lm.tools.filter((tool) => !isBlockedTool(tool));
 }
 function isBlockedTool(tool) {
   return BLOCKED_TOOL_NAMES.has(tool.name.toLowerCase());
@@ -18130,17 +18383,17 @@ function clampToolRoundLimit(value) {
 }
 async function invokeToolResultPart(toolCall, request, token, stream) {
   try {
-    const result = await vscode6.lm.invokeTool(
+    const result = await vscode7.lm.invokeTool(
       toolCall.name,
       { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
       token
     );
-    return { resultPart: new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content) };
+    return { resultPart: new vscode7.LanguageModelToolResultPart(toolCall.callId, result.content) };
   } catch (err) {
     const message = toolErrorMessage(toolCall.name, err);
     stream.progress(message);
     return {
-      resultPart: new vscode6.LanguageModelToolResultPart(toolCall.callId, [new vscode6.LanguageModelTextPart(message)]),
+      resultPart: new vscode7.LanguageModelToolResultPart(toolCall.callId, [new vscode7.LanguageModelTextPart(message)]),
       failureSignature: `${toolCall.name}:${stableStringify(toolCall.input)}:${message}`,
       message
     };
@@ -18171,12 +18424,12 @@ function toLanguageModelChatTool(tool) {
   };
 }
 function toVsCodeMessage(message) {
-  return message.role === "assistant" ? vscode6.LanguageModelChatMessage.Assistant(message.content) : vscode6.LanguageModelChatMessage.User(message.content);
+  return message.role === "assistant" ? vscode7.LanguageModelChatMessage.Assistant(message.content) : vscode7.LanguageModelChatMessage.User(message.content);
 }
 function chatResponseTurnToText(turn) {
   const parts = [];
   for (const r of turn.response) {
-    if (r instanceof vscode6.ChatResponseMarkdownPart) {
+    if (r instanceof vscode7.ChatResponseMarkdownPart) {
       parts.push(typeof r.value === "string" ? r.value : r.value.value);
     }
   }
@@ -18196,14 +18449,14 @@ function toLanguageModelRequestOptions(model, tools) {
   if (model?.reasoningEffort) options.modelOptions = { reasoningEffort: model.reasoningEffort };
   if (tools.length > 0) {
     options.tools = tools;
-    options.toolMode = vscode6.LanguageModelChatToolMode.Auto;
+    options.toolMode = vscode7.LanguageModelChatToolMode.Auto;
   }
   return options;
 }
 async function selectModel(selector, fallback, stream) {
   if (!selector) return fallback;
   try {
-    const models = await vscode6.lm.selectChatModels(selector);
+    const models = await vscode7.lm.selectChatModels(selector);
     if (models.length === 0) {
       stream.markdown(
         `*No chat model matched ${formatModelSelector(selector)}. Using the currently selected model (${fallback.name}).*
@@ -18239,9 +18492,9 @@ function formatModelSelector(selector) {
 }
 
 // src/webview/panel.ts
-var vscode7 = __toESM(require("vscode"));
-var fs9 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
+var vscode8 = __toESM(require("vscode"));
+var fs10 = __toESM(require("fs"));
+var path12 = __toESM(require("path"));
 var GraphPanelManager = class {
   constructor(context, deps) {
     this.context = context;
@@ -18251,17 +18504,17 @@ var GraphPanelManager = class {
   disposeListeners = [];
   open() {
     if (this.current) {
-      this.current.reveal(vscode7.ViewColumn.Active);
+      this.current.reveal(vscode8.ViewColumn.Active);
       return;
     }
-    const panel = vscode7.window.createWebviewPanel(
+    const panel = vscode8.window.createWebviewPanel(
       "agentOrchestratorGraph",
       "Agent Orchestrator",
-      vscode7.ViewColumn.Active,
+      vscode8.ViewColumn.Active,
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [vscode7.Uri.file(path11.join(this.context.extensionPath, "dist"))]
+        localResourceRoots: [vscode8.Uri.file(path12.join(this.context.extensionPath, "dist"))]
       }
     );
     this.current = panel;
@@ -18367,10 +18620,10 @@ var GraphPanelManager = class {
     void panel.webview.postMessage(msg);
   }
   renderHtml(webview) {
-    const distRoot = vscode7.Uri.file(path11.join(this.context.extensionPath, "dist"));
-    const scriptUri = webview.asWebviewUri(vscode7.Uri.joinPath(distRoot, "webview.js"));
-    const cssPath = path11.join(this.context.extensionPath, "dist", "webview.css");
-    const cssTag = fs9.existsSync(cssPath) ? `<link rel="stylesheet" href="${webview.asWebviewUri(vscode7.Uri.joinPath(distRoot, "webview.css"))}">` : "";
+    const distRoot = vscode8.Uri.file(path12.join(this.context.extensionPath, "dist"));
+    const scriptUri = webview.asWebviewUri(vscode8.Uri.joinPath(distRoot, "webview.js"));
+    const cssPath = path12.join(this.context.extensionPath, "dist", "webview.css");
+    const cssTag = fs10.existsSync(cssPath) ? `<link rel="stylesheet" href="${webview.asWebviewUri(vscode8.Uri.joinPath(distRoot, "webview.css"))}">` : "";
     const nonce = randomNonce();
     const csp = [
       `default-src 'none';`,
@@ -18406,7 +18659,7 @@ function randomNonce() {
 
 // src/extension.ts
 async function activate(context) {
-  const output = vscode8.window.createOutputChannel("Agent Orchestrator");
+  const output = vscode9.window.createOutputChannel("Agent Orchestrator");
   context.subscriptions.push(output);
   output.appendLine("Agent Orchestrator activating...");
   const root = workspaceRoot();
@@ -18432,6 +18685,7 @@ async function activate(context) {
       getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null
     });
     output.appendLine("Chat participant @orchestrator registered.");
+    await resumePendingRetries(context, p, ledger);
   } else {
     output.appendLine(
       "Workspace not available \u2014 chat participant registration deferred. Open a folder to enable orchestration."
@@ -18464,7 +18718,7 @@ async function activate(context) {
       }));
     },
     listModels: async () => {
-      const models = await vscode8.lm.selectChatModels();
+      const models = await vscode9.lm.selectChatModels();
       return models.map((model) => ({
         id: model.id,
         name: model.name,
@@ -18539,20 +18793,20 @@ async function activate(context) {
     onLedgerEntry: (cb) => ledger ? ledger.onAppend(cb) : () => void 0
   });
   context.subscriptions.push(
-    vscode8.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
+    vscode9.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
       panel.open();
     }),
-    vscode8.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
+    vscode9.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
       if (!store || !dispatcher) {
-        vscode8.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
+        vscode9.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
         return;
       }
       const wf = store.get();
       if (!wf || wf.nodes.length === 0) {
-        vscode8.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
+        vscode9.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
         return;
       }
-      const choice = await vscode8.window.showQuickPick(
+      const choice = await vscode9.window.showQuickPick(
         wf.nodes.map((n) => ({ label: n.label, description: n.id, node: n })),
         { placeHolder: "Pick a node to fire" }
       );
@@ -18560,18 +18814,18 @@ async function activate(context) {
       try {
         await dispatcher.fireNode(choice.node, { reason: "manual" });
       } catch (err) {
-        vscode8.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
+        vscode9.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
       }
     }),
-    vscode8.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
+    vscode9.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
       if (!p) return;
-      const doc = await vscode8.workspace.openTextDocument(vscode8.Uri.file(p.ledgerJsonl));
-      await vscode8.window.showTextDocument(doc, { preview: false });
+      const doc = await vscode9.workspace.openTextDocument(vscode9.Uri.file(p.ledgerJsonl));
+      await vscode9.window.showTextDocument(doc, { preview: false });
     }),
-    vscode8.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
+    vscode9.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
       triggers?.disposeAll();
-      await vscode8.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode8.ConfigurationTarget.Workspace);
-      vscode8.window.showWarningMessage(
+      await vscode9.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode9.ConfigurationTarget.Workspace);
+      vscode9.window.showWarningMessage(
         "Agent Orchestrator: all triggers stopped and disabled. Re-enable in settings."
       );
     })
@@ -18580,6 +18834,24 @@ async function activate(context) {
   output.appendLine("Agent Orchestrator activated.");
 }
 function deactivate() {
+}
+async function resumePendingRetries(context, p, ledger) {
+  const retryStates = await listRetryStates(p);
+  for (const state of retryStates) {
+    const retryAtMs = Date.parse(state.retryAt);
+    const delayMs = Number.isNaN(retryAtMs) ? 0 : retryAtMs - Date.now();
+    scheduleRetryChat(context, retryQuery(state.nodeId, state.id), Math.max(0, delayMs));
+    await ledger.append({
+      type: "retry.scheduled",
+      node: state.nodeId,
+      detail: {
+        retryId: state.id,
+        retryAt: state.retryAt,
+        resumed: true,
+        drainedHandoffs: state.drainedHandoffs.length
+      }
+    });
+  }
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {

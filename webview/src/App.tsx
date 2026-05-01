@@ -470,6 +470,30 @@ function activityFromEntry(
           eventId
         }
       };
+    case "retry.scheduled":
+      if (!node || !nodeIds.has(node)) return null;
+      return {
+        nodeId: node,
+        activity: {
+          status: "queued",
+          label: "Retry scheduled",
+          detail: retryDetail(entry),
+          ts: entry.ts,
+          eventId
+        }
+      };
+    case "retry.restored":
+      if (!node || !nodeIds.has(node)) return null;
+      return {
+        nodeId: node,
+        activity: {
+          status: "running",
+          label: "Retry restored",
+          detail: retryDetail(entry),
+          ts: entry.ts,
+          eventId
+        }
+      };
     case "guardrail.tripped":
       if (!node || !nodeIds.has(node)) return null;
       return {
@@ -527,6 +551,14 @@ function sessionDetail(entry: LedgerEntry): string {
   const responseLength = typeof entry.responseLength === "number" ? entry.responseLength : 0;
   const handoffText = drained > 0 ? ` Drained ${drained} handoff(s).` : "";
   return responseLength > 0 ? `Response: ${responseLength} chars.${handoffText}` : `Session completed.${handoffText}`;
+}
+
+function retryDetail(entry: LedgerEntry): string {
+  const detail = (entry.detail ?? {}) as Record<string, unknown>;
+  const retryAt = typeof detail.retryAt === "string" ? detail.retryAt : "";
+  const drained = typeof detail.drainedHandoffs === "number" ? detail.drainedHandoffs : 0;
+  const retryAtText = retryAt ? `Retry at ${shortTime(retryAt)}.` : "Retry queued.";
+  return drained > 0 ? `${retryAtText} Preserved ${drained} handoff(s).` : retryAtText;
 }
 
 function shortTime(ts: string): string {

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { Workflow, WorkflowNode, TriggerType } from "../../shared/types.js";
 import type { Ledger } from "../orchestration/ledger.js";
+import { scheduledDispatchDownstreamState } from "./downstream-state.js";
 
 export interface DispatchContext {
   reason: TriggerType;
@@ -41,6 +42,24 @@ export class Dispatcher {
     }
 
     const wf = this.getWorkflow();
+    if (wf) {
+      const downstreamState = scheduledDispatchDownstreamState(wf, node, ctx.reason, await this.ledger.tail(1000));
+      if (downstreamState.busy) {
+        await this.ledger.append({
+          type: "guardrail.tripped",
+          rule: "downstream-running",
+          node: node.id,
+          trigger: ctx.reason,
+          eventId: ctx.rootEventId,
+          detail: {
+            action: "deferred-to-next-tick",
+            downstream: downstreamState.downstream.filter((target) => target.status === "running")
+          }
+        });
+        return;
+      }
+    }
+
     if (wf && this.inFlight >= wf.settings.concurrencyLimit) {
       await this.ledger.append({
         type: "guardrail.tripped",

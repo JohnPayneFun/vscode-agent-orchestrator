@@ -193,6 +193,8 @@ export type LedgerEventType =
   | "trigger.fired"
   | "session.spawned"
   | "session.errored"
+  | "retry.scheduled"
+  | "retry.restored"
   | "handoff.emitted"
   | "handoff.delivered"
   | "handoff.consumed"

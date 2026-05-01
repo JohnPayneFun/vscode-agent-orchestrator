@@ -4,7 +4,10 @@ import type { Ledger } from "../orchestration/ledger.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../orchestration/node-resolver.js";
-import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
+import { runWorkflowNode, WorkflowNodeRunError, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
+import { retryQuery, scheduleRetryChat } from "./retry-chat.js";
+import { saveRetryState } from "./retry-state.js";
+import { parseUsageLimitRetry } from "./usage-limit.js";
 
 const DEFAULT_TOOL_ROUND_LIMIT = 16;
 const MIN_TOOL_ROUND_LIMIT = 1;
@@ -102,7 +105,7 @@ export function registerChatParticipant(
         return {};
       }
 
-      return await runNode({ deps, node, request, ctx, stream, token, userText });
+      return await runNode({ context, deps, node, request, ctx, stream, token, userText });
     } catch (err) {
       stream.markdown(
         `**Orchestrator error:** ${err instanceof Error ? err.message : String(err)}`
@@ -165,6 +168,7 @@ function promptEquals(left: string, right: string): boolean {
 }
 
 interface RunArgs {
+  context: vscode.ExtensionContext;
   deps: ChatParticipantDeps;
   node: WorkflowNode;
   request: vscode.ChatRequest;
@@ -175,7 +179,7 @@ interface RunArgs {
 }
 
 async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
-  const { deps, node, request, ctx, stream, token, userText } = args;
+  const { context, deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = clampToolRoundLimit(config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   try {
@@ -191,6 +195,8 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
     });
     return { metadata: { nodeId: result.nodeId, eventId: result.eventId, handoffsEmitted: result.handoffsEmitted } };
   } catch (err) {
+    const scheduledRetry = await scheduleUsageLimitRetry({ context, deps, node, err, stream });
+    if (scheduledRetry) return { metadata: { nodeId: node.id, retryId: scheduledRetry.retryId, retryAt: scheduledRetry.retryAt } };
     if (err instanceof vscode.LanguageModelError) {
       stream.markdown(
         `\n\n**LanguageModelError:** ${err.code} — ${err.message}\n\nCheck that you've selected a model in the chat picker and that you have access (e.g. GitHub Copilot subscription).`
@@ -200,6 +206,59 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
       throw err;
     }
   }
+}
+
+async function scheduleUsageLimitRetry(args: {
+  context: vscode.ExtensionContext;
+  deps: ChatParticipantDeps;
+  node: WorkflowNode;
+  err: unknown;
+  stream: vscode.ChatResponseStream;
+}): Promise<{ retryId: string; retryAt: string } | null> {
+  const message = errorMessage(args.err);
+  const retry = parseUsageLimitRetry(message);
+  if (!retry) return null;
+
+  const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
+  const retryState = await saveRetryState(args.deps.paths, {
+    retryAt: retry.retryAt,
+    nodeId: args.node.id,
+    triggerType: runError?.triggerType ?? "manual",
+    userText: runError?.cleanedUserText ?? "",
+    drainedHandoffs: runError?.drainedHandoffs ?? [],
+    reason: message
+  });
+  scheduleRetryChat(args.context, retryQuery(args.node.id, retryState.id), retry.retryDelayMs);
+
+  await args.deps.ledger.append({
+    type: "retry.scheduled",
+    node: args.node.id,
+    eventId: runError?.eventId,
+    detail: {
+      retryId: retryState.id,
+      retryAt: retry.retryAt,
+      waitMs: retry.waitMs,
+      retryDelayMs: retry.retryDelayMs,
+      matchedText: retry.matchedText,
+      drainedHandoffs: retryState.drainedHandoffs.length
+    }
+  });
+  args.stream.markdown(
+    `\n\n**Usage limit hit.** Scheduled \`${formatNodeReference(args.node)}\` to retry at ${new Date(retry.retryAt).toLocaleString()} after ${formatRetryDelay(retry.retryDelayMs)}.\n`
+  );
+  return { retryId: retryState.id, retryAt: retry.retryAt };
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function formatRetryDelay(ms: number): string {
+  const minutes = Math.ceil(ms / 60_000);
+  if (minutes < 60) return `${minutes} minute(s)`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder > 0 ? `${hours} hour(s) ${remainder} minute(s)` : `${hours} hour(s)`;
 }
 
 function chatHistoryToRuntimeMessages(ctx: vscode.ChatContext): RuntimeChatMessage[] {

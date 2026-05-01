@@ -11,6 +11,7 @@ export interface OrchestrationPaths {
   triggersStateJson: string;
   runtimeRoot: string;
   schemaJson: string;
+  retriesRoot: string;
 }
 
 export function workspaceRoot(): string | undefined {
@@ -32,7 +33,8 @@ export function paths(root: string): OrchestrationPaths {
     ledgerJsonl: path.join(orch, "ledger.jsonl"),
     triggersStateJson: path.join(orch, "triggers", "state.json"),
     runtimeRoot: runtime,
-    schemaJson: path.join(runtime, "workflow.schema.json")
+    schemaJson: path.join(runtime, "workflow.schema.json"),
+    retriesRoot: path.join(runtime, "retries")
   };
 }
 
@@ -42,7 +44,8 @@ export async function ensureDirs(p: OrchestrationPaths): Promise<void> {
     p.inboxRoot,
     p.outboxRoot,
     path.dirname(p.triggersStateJson),
-    p.runtimeRoot
+    p.runtimeRoot,
+    p.retriesRoot
   ];
   for (const d of dirs) {
     await fs.promises.mkdir(d, { recursive: true });

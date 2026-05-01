@@ -8,6 +8,8 @@ import { resolveWorkflowNode } from "./orchestration/node-resolver.js";
 import { Dispatcher } from "./runtime/dispatcher.js";
 import { TriggerRegistry } from "./runtime/trigger-registry.js";
 import { registerChatParticipant } from "./runtime/chat-participant.js";
+import { retryQuery, scheduleRetryChat } from "./runtime/retry-chat.js";
+import { listRetryStates } from "./runtime/retry-state.js";
 import { GraphPanelManager } from "./webview/panel.js";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -42,6 +44,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null
     });
     output.appendLine("Chat participant @orchestrator registered.");
+    await resumePendingRetries(context, p, ledger);
   } else {
     output.appendLine(
       "Workspace not available — chat participant registration deferred. Open a folder to enable orchestration."
@@ -197,4 +200,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
 export function deactivate(): void {
   /* subscriptions handle cleanup */
+}
+
+async function resumePendingRetries(context: vscode.ExtensionContext, p: OrchestrationPaths, ledger: Ledger): Promise<void> {
+  const retryStates = await listRetryStates(p);
+  for (const state of retryStates) {
+    const retryAtMs = Date.parse(state.retryAt);
+    const delayMs = Number.isNaN(retryAtMs) ? 0 : retryAtMs - Date.now();
+    scheduleRetryChat(context, retryQuery(state.nodeId, state.id), Math.max(0, delayMs));
+    await ledger.append({
+      type: "retry.scheduled",
+      node: state.nodeId,
+      detail: {
+        retryId: state.id,
+        retryAt: state.retryAt,
+        resumed: true,
+        drainedHandoffs: state.drainedHandoffs.length
+      }
+    });
+  }
 }

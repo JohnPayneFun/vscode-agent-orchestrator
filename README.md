@@ -89,6 +89,10 @@ For MCP-heavy flows, especially Monday.com project-manager nodes, set `vscodeAge
 
 Nodes should create or update files with the orchestrator's `<<WRITE_FILE path=...>>...<<END_WRITE_FILE>>` block protocol. Copilot file-mutation tools such as `copilot_createFile` are intentionally not exposed to orchestrated node model calls because they can require native chat stream state that is not available in this custom tool loop.
 
+If a node hits a usage or rate limit and the error includes text like `Try again in ~63 min`, the orchestrator saves the failed run context, preserves drained handoffs, and schedules a one-shot retry one minute after the reported wait time. In that example, the node retries after 64 minutes. The graph shows this as `Retry scheduled`, and retry state is stored under `.agent-orchestrator/runtime/retries/` until the retry runs.
+
+Scheduled triggers (`timer` and `interval`) also check outgoing graph-edge targets before opening chat. If a Project Manager timer fires while an output node such as Lead Dev is still `running`, the dispatch is skipped with a `downstream-running` guardrail entry and the timer waits for its next tick instead of piling up another task.
+
 ### 6. What to tell the user after setup
 
 Use this plain-language summary:
@@ -186,7 +190,7 @@ Each node has an optional `model` selector (`vendor` / `family` / `id`) that map
 
 Nodes can also set `model.reasoningEffort` to `none`, `low`, `medium`, `high`, or `xhigh`. In VS Code this is passed through as the Copilot-style `reasoningEffort` model option, matching the native Thinking Effort menu when the selected model supports it.
 
-When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session. Tool calls are capped by the `vscodeAgentOrchestrator.toolRoundLimit` setting, which defaults to `16` rounds and can be raised up to `50` for MCP-heavy runs. If the same tool call fails twice with the same input and error, the orchestrator stops the run early to avoid retry loops. Copilot file-mutation tools are filtered out; use `<<WRITE_FILE path=...>>` blocks for file artifacts instead.
+When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session. Tool calls are capped by the `vscodeAgentOrchestrator.toolRoundLimit` setting, which defaults to `16` rounds and can be raised up to `50` for MCP-heavy runs. If the same tool call fails twice with the same input and error, the orchestrator stops the run early to avoid retry loops. Usage-limit errors that say `try again in ...` are retried automatically one minute after the requested wait. Copilot file-mutation tools are filtered out; use `<<WRITE_FILE path=...>>` blocks for file artifacts instead.
 
 ## Quick start
 
