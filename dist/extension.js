@@ -16542,6 +16542,45 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// src/orchestration/source-control.ts
+var import_child_process = require("child_process");
+var import_util = require("util");
+var exec = (0, import_util.promisify)(import_child_process.execFile);
+async function detectSourceControl(workspaceRoot2) {
+  if (!workspaceRoot2) return { error: "No workspace folder open." };
+  try {
+    const repositoryRoot = await git(workspaceRoot2, ["rev-parse", "--show-toplevel"]);
+    const [remoteUrl, currentBranch] = await Promise.all([
+      git(repositoryRoot, ["remote", "get-url", "origin"]).catch(() => ""),
+      git(repositoryRoot, ["branch", "--show-current"]).catch(() => "")
+    ]);
+    const ownerRepo = parseGitHubOwnerRepo(remoteUrl);
+    return {
+      repositoryRoot,
+      remoteUrl: remoteUrl || void 0,
+      ownerRepo: ownerRepo ?? void 0,
+      currentBranch: currentBranch || void 0,
+      currentBranchFilter: currentBranch ? exactBranchFilter(currentBranch) : void 0
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+}
+function parseGitHubOwnerRepo(remoteUrl) {
+  const trimmed = remoteUrl.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/i) ?? trimmed.match(/^git@github\.com:([^/]+)\/([^/]+?)(?:\.git)?$/i) ?? trimmed.match(/^ssh:\/\/git@github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/i);
+  if (!match) return null;
+  return `${match[1]}/${match[2]}`;
+}
+function exactBranchFilter(branch) {
+  return `^${branch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
+}
+async function git(cwd, args) {
+  const { stdout } = await exec("git", args, { cwd, timeout: 1e4 });
+  return stdout.trim();
+}
+
 // src/orchestration/node-resolver.ts
 function resolveWorkflowNode(workflow, rawReference) {
   const reference = rawReference.trim();
@@ -16915,8 +16954,8 @@ var HandoffTrigger = class {
 var vscode3 = __toESM(require("vscode"));
 var fs7 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
-var import_child_process = require("child_process");
-var import_util = require("util");
+var import_child_process2 = require("child_process");
+var import_util2 = require("util");
 
 // src/runtime/triggers/gh-pr-events.ts
 function detectGhPrEvents(prs, perNode, configuredEvents, branchFilter = null) {
@@ -16976,7 +17015,7 @@ function closedPrState(state) {
 }
 
 // src/runtime/triggers/gh-pr-trigger.ts
-var exec = (0, import_util.promisify)(import_child_process.execFile);
+var exec2 = (0, import_util2.promisify)(import_child_process2.execFile);
 var GhPrTrigger = class {
   constructor(node, cfg, p, bus, deps) {
     this.node = node;
@@ -17006,7 +17045,7 @@ var GhPrTrigger = class {
     if (this.disposed) return;
     let prs;
     try {
-      const { stdout } = await exec(
+      const { stdout } = await exec2(
         "gh",
         [
           "pr",
@@ -18832,6 +18871,8 @@ var GraphPanelManager = class {
         this.post(panel, { type: "agents.list", agents });
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
+        const sourceControl = await this.deps.detectSourceControl();
+        this.post(panel, { type: "sourceControl.detected", sourceControl });
         const tail = await this.deps.tailLedger();
         for (const entry of tail) {
           this.post(panel, { type: "ledger.append", entry });
@@ -18851,6 +18892,11 @@ var GraphPanelManager = class {
       case "models.requestList": {
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
+        return;
+      }
+      case "sourceControl.request": {
+        const sourceControl = await this.deps.detectSourceControl();
+        this.post(panel, { type: "sourceControl.detected", sourceControl });
         return;
       }
       case "node.run": {
@@ -19010,6 +19056,7 @@ async function activate(context) {
         maxInputTokens: model.maxInputTokens
       }));
     },
+    detectSourceControl: async () => detectSourceControl(root),
     getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null,
     runNode: async (nodeId) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };

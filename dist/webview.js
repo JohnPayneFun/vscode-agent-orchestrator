@@ -41599,7 +41599,7 @@
   // webview/src/NodeForm.tsx
   var import_react6 = __toESM(require_react());
   var import_jsx_runtime4 = __toESM(require_jsx_runtime());
-  function NodeForm({ node, agents, models, onChange, onDelete }) {
+  function NodeForm({ node, agents, models, sourceControl, onRefreshSourceControl, onChange, onDelete }) {
     const set3 = (key, value) => {
       onChange({ ...node, [key]: value });
     };
@@ -41677,7 +41677,15 @@
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "diagnostics", children: "Problems / diagnostics" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "webhook", children: "Webhook" })
       ] }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(TriggerFields, { trigger: node.trigger, onChange: setTrigger }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+        TriggerFields,
+        {
+          trigger: node.trigger,
+          sourceControl,
+          onRefreshSourceControl,
+          onChange: setTrigger
+        }
+      ),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Context (system prompt \u2014 the persona's standing instructions)" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
         "textarea",
@@ -41825,6 +41833,8 @@
   }
   function TriggerFields({
     trigger,
+    sourceControl,
+    onRefreshSourceControl,
     onChange,
     allowOperator = true
   }) {
@@ -41869,6 +41879,8 @@
                 TriggerFields,
                 {
                   trigger: child,
+                  sourceControl,
+                  onRefreshSourceControl,
                   allowOperator: false,
                   onChange: (nextChild) => onChange({
                     ...trigger,
@@ -41899,6 +41911,45 @@
                 value: trigger.repo,
                 placeholder: "owner/repo",
                 onChange: (e) => onChange({ ...trigger, repo: e.target.value })
+              }
+            ),
+            sourceControl?.ownerRepo || sourceControl?.currentBranch ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("p", { className: "field-note", children: [
+              "Detected ",
+              sourceControl.ownerRepo ?? "workspace repo",
+              sourceControl.currentBranch ? ` on ${sourceControl.currentBranch}` : "",
+              "."
+            ] }) : sourceControl?.error ? /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("p", { className: "field-note", children: [
+              "Source control detection failed: ",
+              sourceControl.error
+            ] }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row", style: { marginTop: 8 }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "button",
+                {
+                  className: "secondary",
+                  disabled: !sourceControl?.ownerRepo,
+                  onClick: () => sourceControl?.ownerRepo && onChange({ ...trigger, repo: sourceControl.ownerRepo }),
+                  children: "Use detected repo"
+                }
+              ),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "button",
+                {
+                  className: "secondary",
+                  disabled: !sourceControl?.ownerRepo || !sourceControl.currentBranchFilter,
+                  onClick: () => sourceControl?.ownerRepo && sourceControl.currentBranchFilter && onChange({ ...trigger, repo: sourceControl.ownerRepo, branchFilter: sourceControl.currentBranchFilter }),
+                  children: "Use repo + branch"
+                }
+              ),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { className: "secondary", onClick: onRefreshSourceControl, children: "Refresh" })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Branch filter (optional regex)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.branchFilter ?? "",
+                placeholder: sourceControl?.currentBranchFilter ?? "^feature/.+$",
+                onChange: (e) => onChange({ ...trigger, branchFilter: e.target.value.trim() || null })
               }
             ),
             /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Events" }),
@@ -42245,6 +42296,7 @@
     const [selectedEdgeId, setSelectedEdgeId] = (0, import_react8.useState)(null);
     const [agents, setAgents] = (0, import_react8.useState)([]);
     const [models, setModels] = (0, import_react8.useState)([]);
+    const [sourceControl, setSourceControl] = (0, import_react8.useState)(null);
     const [ledger, setLedger] = (0, import_react8.useState)([]);
     const [status, setStatus] = (0, import_react8.useState)("");
     const [nowMs, setNowMs] = (0, import_react8.useState)(() => Date.now());
@@ -42283,6 +42335,9 @@
             break;
           case "models.list":
             setModels(msg.models);
+            break;
+          case "sourceControl.detected":
+            setSourceControl(msg.sourceControl);
             break;
           case "ledger.append":
             setNowMs(Date.now());
@@ -42469,6 +42524,8 @@
             node: selectedNode,
             agents,
             models,
+            sourceControl,
+            onRefreshSourceControl: () => send({ type: "sourceControl.request" }),
             onChange: updateNode,
             onDelete: () => deleteNode(selectedNode.id)
           }

@@ -158,7 +158,7 @@ State lives in `.agent-orchestrator/` at the workspace root:
 
 Use `any` when a node needs multiple inputs. In the graph editor, click `+ OR` under a trigger to create another input dropdown; the saved workflow uses `any` behind the scenes. For example, a PM node can run on both inbox handoffs and a recurring timer:
 
-GitHub PR triggers keep per-node state in `.agent-orchestrator/triggers/state.json`. The first poll establishes the current high-water mark, such as "latest seen PR is 206"; later polls fire when PR 207 appears, even if it was opened and merged between poll ticks. Select `closed` if you want the node to treat fast-merged PRs as close/merge reviews, or `opened` if any newly observed PR number should start the review.
+GitHub PR triggers keep per-node state in `.agent-orchestrator/triggers/state.json`. The first poll establishes the current high-water mark, such as "latest seen PR is 206"; later polls fire when PR 207 appears, even if it was opened and merged between poll ticks. The GitHub PR trigger editor can detect the workspace's GitHub `owner/repo` and current branch from Source Control, then fill the repo field or an exact branch regex for you. Select `closed` if you want the node to treat fast-merged PRs as close/merge reviews, or `opened` if any newly observed PR number should start the review.
 
 ```jsonc
 {

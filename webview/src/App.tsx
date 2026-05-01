@@ -5,7 +5,8 @@ import type {
   LedgerEntry,
   ExtToWebview,
   AgentOption,
-  ModelOption
+  ModelOption,
+  SourceControlInfo
 } from "../../shared/types.js";
 import { send, onMessage } from "./api.js";
 import { GraphView } from "./GraphView.js";
@@ -77,6 +78,7 @@ export function App(): JSX.Element {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [models, setModels] = useState<ModelOption[]>([]);
+  const [sourceControl, setSourceControl] = useState<SourceControlInfo | null>(null);
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [status, setStatus] = useState<string>("");
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -117,6 +119,9 @@ export function App(): JSX.Element {
           break;
         case "models.list":
           setModels(msg.models);
+          break;
+        case "sourceControl.detected":
+          setSourceControl(msg.sourceControl);
           break;
         case "ledger.append":
           setNowMs(Date.now());
@@ -320,6 +325,8 @@ export function App(): JSX.Element {
               node={selectedNode}
               agents={agents}
               models={models}
+              sourceControl={sourceControl}
+              onRefreshSourceControl={() => send({ type: "sourceControl.request" })}
               onChange={updateNode}
               onDelete={() => deleteNode(selectedNode.id)}
             />

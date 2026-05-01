@@ -7,18 +7,21 @@ import type {
   ModelReasoningEffort,
   ModelSelector,
   AgentOption,
-  ModelOption
+  ModelOption,
+  SourceControlInfo
 } from "../../shared/types.js";
 
 interface Props {
   node: WorkflowNode;
   agents: AgentOption[];
   models: ModelOption[];
+  sourceControl: SourceControlInfo | null;
+  onRefreshSourceControl: () => void;
   onChange: (next: WorkflowNode) => void;
   onDelete: () => void;
 }
 
-export function NodeForm({ node, agents, models, onChange, onDelete }: Props): JSX.Element {
+export function NodeForm({ node, agents, models, sourceControl, onRefreshSourceControl, onChange, onDelete }: Props): JSX.Element {
   const set = <K extends keyof WorkflowNode>(key: K, value: WorkflowNode[K]): void => {
     onChange({ ...node, [key]: value });
   };
@@ -104,7 +107,12 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
         <option value="webhook">Webhook</option>
       </select>
 
-      <TriggerFields trigger={node.trigger} onChange={setTrigger} />
+      <TriggerFields
+        trigger={node.trigger}
+        sourceControl={sourceControl}
+        onRefreshSourceControl={onRefreshSourceControl}
+        onChange={setTrigger}
+      />
 
       <label>Context (system prompt — the persona's standing instructions)</label>
       <textarea
@@ -257,10 +265,14 @@ function formatReasoningEffort(effort: ModelReasoningEffort): string {
 
 function TriggerFields({
   trigger,
+  sourceControl,
+  onRefreshSourceControl,
   onChange,
   allowOperator = true
 }: {
   trigger: TriggerConfig;
+  sourceControl: SourceControlInfo | null;
+  onRefreshSourceControl: () => void;
   onChange: (t: TriggerConfig) => void;
   allowOperator?: boolean;
 }): JSX.Element | null {
@@ -298,6 +310,8 @@ function TriggerFields({
                 </div>
                 <TriggerFields
                   trigger={child}
+                  sourceControl={sourceControl}
+                  onRefreshSourceControl={onRefreshSourceControl}
                   allowOperator={false}
                   onChange={(nextChild) =>
                     onChange({
@@ -329,6 +343,42 @@ function TriggerFields({
             value={trigger.repo}
             placeholder="owner/repo"
             onChange={(e) => onChange({ ...trigger, repo: e.target.value })}
+          />
+          {sourceControl?.ownerRepo || sourceControl?.currentBranch ? (
+            <p className="field-note">
+              Detected {sourceControl.ownerRepo ?? "workspace repo"}{sourceControl.currentBranch ? ` on ${sourceControl.currentBranch}` : ""}.
+            </p>
+          ) : sourceControl?.error ? (
+            <p className="field-note">Source control detection failed: {sourceControl.error}</p>
+          ) : null}
+          <div className="row" style={{ marginTop: 8 }}>
+            <button
+              className="secondary"
+              disabled={!sourceControl?.ownerRepo}
+              onClick={() => sourceControl?.ownerRepo && onChange({ ...trigger, repo: sourceControl.ownerRepo })}
+            >
+              Use detected repo
+            </button>
+            <button
+              className="secondary"
+              disabled={!sourceControl?.ownerRepo || !sourceControl.currentBranchFilter}
+              onClick={() =>
+                sourceControl?.ownerRepo &&
+                sourceControl.currentBranchFilter &&
+                onChange({ ...trigger, repo: sourceControl.ownerRepo, branchFilter: sourceControl.currentBranchFilter })
+              }
+            >
+              Use repo + branch
+            </button>
+            <button className="secondary" onClick={onRefreshSourceControl}>
+              Refresh
+            </button>
+          </div>
+          <label>Branch filter (optional regex)</label>
+          <input
+            value={trigger.branchFilter ?? ""}
+            placeholder={sourceControl?.currentBranchFilter ?? "^feature/.+$"}
+            onChange={(e) => onChange({ ...trigger, branchFilter: e.target.value.trim() || null })}
           />
           <label>Events</label>
           <select

@@ -7,7 +7,8 @@ import type {
   Workflow,
   LedgerEntry,
   AgentOption,
-  ModelOption
+  ModelOption,
+  SourceControlInfo
 } from "../../shared/types.js";
 
 export interface PanelDeps {
@@ -15,6 +16,7 @@ export interface PanelDeps {
   saveWorkflow: (w: Workflow) => Promise<{ ok: boolean; error?: string }>;
   listAgents: () => Promise<AgentOption[]>;
   listModels: () => Promise<ModelOption[]>;
+  detectSourceControl: () => Promise<SourceControlInfo>;
   getAgentInstructions: (agentId: string) => Promise<string | null>;
   runNode: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   testTrigger: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
@@ -84,6 +86,8 @@ export class GraphPanelManager {
         this.post(panel, { type: "agents.list", agents });
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
+        const sourceControl = await this.deps.detectSourceControl();
+        this.post(panel, { type: "sourceControl.detected", sourceControl });
         const tail = await this.deps.tailLedger();
         for (const entry of tail) {
           this.post(panel, { type: "ledger.append", entry });
@@ -103,6 +107,11 @@ export class GraphPanelManager {
       case "models.requestList": {
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
+        return;
+      }
+      case "sourceControl.request": {
+        const sourceControl = await this.deps.detectSourceControl();
+        this.post(panel, { type: "sourceControl.detected", sourceControl });
         return;
       }
       case "node.run": {

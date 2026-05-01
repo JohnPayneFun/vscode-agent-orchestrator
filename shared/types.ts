@@ -141,6 +141,15 @@ export interface ModelOption {
   maxInputTokens: number;
 }
 
+export interface SourceControlInfo {
+  repositoryRoot?: string;
+  remoteUrl?: string;
+  ownerRepo?: string;
+  currentBranch?: string;
+  currentBranchFilter?: string;
+  error?: string;
+}
+
 export interface WorkflowEdge {
   id: string;
   from: string; // node id
@@ -224,6 +233,7 @@ export type WebviewToExt =
   | { type: "workflow.save"; workflow: Workflow }
   | { type: "agents.requestList" }
   | { type: "models.requestList" }
+  | { type: "sourceControl.request" }
   | { type: "node.run"; nodeId: string; workflow?: Workflow }
   | { type: "ledger.tail" }
   | { type: "trigger.test"; nodeId: string; workflow?: Workflow };
@@ -233,6 +243,7 @@ export type ExtToWebview =
   | { type: "workflow.saved"; ok: boolean; error?: string }
   | { type: "agents.list"; agents: AgentOption[] }
   | { type: "models.list"; models: ModelOption[] }
+  | { type: "sourceControl.detected"; sourceControl: SourceControlInfo }
   | { type: "node.runResult"; nodeId: string; ok: boolean; error?: string }
   | { type: "trigger.testResult"; nodeId: string; ok: boolean; error?: string }
   | { type: "ledger.append"; entry: LedgerEntry }

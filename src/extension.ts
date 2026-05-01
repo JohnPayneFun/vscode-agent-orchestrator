@@ -4,6 +4,7 @@ import { Ledger } from "./orchestration/ledger.js";
 import { WorkflowStore } from "./orchestration/workflow-store.js";
 import { MessageBus } from "./orchestration/message-bus.js";
 import { getAgent, listAgents } from "./orchestration/agents.js";
+import { detectSourceControl } from "./orchestration/source-control.js";
 import { resolveWorkflowNode } from "./orchestration/node-resolver.js";
 import { Dispatcher } from "./runtime/dispatcher.js";
 import { TriggerRegistry } from "./runtime/trigger-registry.js";
@@ -88,6 +89,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         maxInputTokens: model.maxInputTokens
       }));
     },
+    detectSourceControl: async () => detectSourceControl(root),
     getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null,
     runNode: async (nodeId: string) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };
