@@ -18084,6 +18084,29 @@ async function openRetryChat(query) {
   }
 }
 
+// src/runtime/tool-filter.ts
+var DEFAULT_BLOCKED_TOOL_NAMES = [
+  "copilot_createfile",
+  "copilot_editfile",
+  "copilot_insertedit",
+  "copilot_replacestring",
+  "copilot_applypatch",
+  "manage_todo_list",
+  "update_todo_list",
+  "todo_write",
+  "update_plan"
+];
+function exposedTools(tools, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
+  return tools.filter((tool) => !isBlockedToolName(tool.name, blockedToolNames));
+}
+function isBlockedToolName(name, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
+  return new Set(blockedToolNames.map(normalizeToolName)).has(normalizeToolName(name));
+}
+function normalizeToolName(name) {
+  const lowerName = name.toLowerCase();
+  return lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".") + 1) : lowerName;
+}
+
 // src/runtime/usage-limit.ts
 var USAGE_LIMIT_RE = /(usage limit|rate limit|quota|too many requests|try again)/i;
 var TRY_AGAIN_RE = /try again in\s*(?:~|about|approximately)?\s*(\d+(?:\.\d+)?)\s*(second|seconds|sec|secs|minute|minutes|min|mins|hour|hours|hr|hrs)\b/i;
@@ -18115,13 +18138,6 @@ var DEFAULT_TOOL_ROUND_LIMIT = 16;
 var MIN_TOOL_ROUND_LIMIT = 1;
 var MAX_TOOL_ROUND_LIMIT = 50;
 var REPEATED_TOOL_FAILURE_LIMIT = 2;
-var BLOCKED_TOOL_NAMES = /* @__PURE__ */ new Set([
-  "copilot_createfile",
-  "copilot_editfile",
-  "copilot_insertedit",
-  "copilot_replacestring",
-  "copilot_applypatch"
-]);
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18228,9 +18244,10 @@ async function runNode(args) {
   const { context, deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode7.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = clampToolRoundLimit(config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
+  const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -18314,7 +18331,7 @@ function chatHistoryToRuntimeMessages(ctx) {
   }
   return messages;
 }
-function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
+function createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) {
   return {
     async selectModel(selector) {
       const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
@@ -18325,7 +18342,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
         family: model.family,
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = exposedTools().map(toLanguageModelChatTool);
+          const tools = exposedTools(vscode7.lm.tools, blockedTools).map(toLanguageModelChatTool);
           const failedToolCalls = /* @__PURE__ */ new Map();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -18370,12 +18387,6 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
       };
     }
   };
-}
-function exposedTools() {
-  return vscode7.lm.tools.filter((tool) => !isBlockedTool(tool));
-}
-function isBlockedTool(tool) {
-  return BLOCKED_TOOL_NAMES.has(tool.name.toLowerCase());
 }
 function clampToolRoundLimit(value) {
   if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;

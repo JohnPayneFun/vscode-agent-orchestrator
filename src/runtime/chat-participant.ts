@@ -7,19 +7,13 @@ import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../or
 import { runWorkflowNode, WorkflowNodeRunError, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
 import { retryQuery, scheduleRetryChat } from "./retry-chat.js";
 import { saveRetryState } from "./retry-state.js";
+import { DEFAULT_BLOCKED_TOOL_NAMES, exposedTools } from "./tool-filter.js";
 import { parseUsageLimitRetry } from "./usage-limit.js";
 
 const DEFAULT_TOOL_ROUND_LIMIT = 16;
 const MIN_TOOL_ROUND_LIMIT = 1;
 const MAX_TOOL_ROUND_LIMIT = 50;
 const REPEATED_TOOL_FAILURE_LIMIT = 2;
-const BLOCKED_TOOL_NAMES = new Set([
-  "copilot_createfile",
-  "copilot_editfile",
-  "copilot_insertedit",
-  "copilot_replacestring",
-  "copilot_applypatch"
-]);
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
@@ -182,9 +176,10 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const { context, deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = clampToolRoundLimit(config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
+  const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -278,7 +273,8 @@ function createVsCodeModelProvider(
   request: vscode.ChatRequest,
   stream: vscode.ChatResponseStream,
   token: vscode.CancellationToken,
-  toolRoundLimit: number
+  toolRoundLimit: number,
+  blockedTools: readonly string[]
 ): RuntimeModelProvider {
   return {
     async selectModel(selector: ModelSelector | undefined) {
@@ -290,7 +286,7 @@ function createVsCodeModelProvider(
         family: model.family,
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = exposedTools().map(toLanguageModelChatTool);
+          const tools = exposedTools(vscode.lm.tools, blockedTools).map(toLanguageModelChatTool);
           const failedToolCalls = new Map<string, number>();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -335,14 +331,6 @@ function createVsCodeModelProvider(
       };
     }
   };
-}
-
-function exposedTools(): vscode.LanguageModelToolInformation[] {
-  return vscode.lm.tools.filter((tool) => !isBlockedTool(tool));
-}
-
-function isBlockedTool(tool: vscode.LanguageModelToolInformation): boolean {
-  return BLOCKED_TOOL_NAMES.has(tool.name.toLowerCase());
 }
 
 interface ToolInvocationOutcome {
