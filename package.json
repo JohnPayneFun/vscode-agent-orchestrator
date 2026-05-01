@@ -112,7 +112,8 @@
             "manage_todo_list",
             "update_todo_list",
             "todo_write",
-            "update_plan"
+            "update_plan",
+            "execution_subagent"
           ],
           "items": {
             "type": "string"

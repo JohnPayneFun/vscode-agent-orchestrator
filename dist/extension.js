@@ -18265,7 +18265,8 @@ var DEFAULT_BLOCKED_TOOL_NAMES = [
   "manage_todo_list",
   "update_todo_list",
   "todo_write",
-  "update_plan"
+  "update_plan",
+  "execution_subagent"
 ];
 function exposedTools(tools, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
   return tools.filter((tool) => !isBlockedToolName(tool.name, blockedToolNames));

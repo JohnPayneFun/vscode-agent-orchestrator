@@ -11,7 +11,8 @@ export const DEFAULT_BLOCKED_TOOL_NAMES = [
   "manage_todo_list",
   "update_todo_list",
   "todo_write",
-  "update_plan"
+  "update_plan",
+  "execution_subagent"
 ] as const;
 
 export function exposedTools<T extends ToolInfo>(

@@ -12,6 +12,11 @@ test("tool filter blocks internal planning todo tools", () => {
   assert.equal(isBlockedToolName("functions.manage_todo_list"), true);
 });
 
+test("tool filter blocks native subagent execution in participant runs", () => {
+  assert.equal(isBlockedToolName("execution_subagent"), true);
+  assert.equal(isBlockedToolName("functions.execution_subagent"), true);
+});
+
 test("tool filter can expose every native tool when blocklist is empty", () => {
   assert.equal(isBlockedToolName("manage_todo_list", []), false);
   assert.equal(isBlockedToolName("copilot_createFile", []), false);
