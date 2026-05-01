@@ -28,6 +28,19 @@ export interface EdgeActivity {
   ts: string;
 }
 
+interface TokenUsageSummary {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  runs: number;
+  estimatedRuns: number;
+}
+
+interface WorkflowTokenUsage {
+  total: TokenUsageSummary;
+  byNode: Record<string, TokenUsageSummary>;
+}
+
 const EMPTY_WORKFLOW: Workflow = {
   $schema: "./runtime/workflow.schema.json",
   version: 1,
@@ -93,7 +106,7 @@ export function App(): JSX.Element {
           break;
         case "ledger.append":
           setNowMs(Date.now());
-          setLedger((prev) => [...prev.slice(-499), msg.entry]);
+          setLedger((prev) => [...prev.slice(-1999), msg.entry]);
           break;
         case "node.runResult":
           setStatus(msg.ok ? `Ran node ${msg.nodeId}.` : `Run failed: ${msg.error}`);
@@ -143,7 +156,9 @@ export function App(): JSX.Element {
   );
   const activityByNode = useMemo(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
   const activityByEdge = useMemo(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
+  const tokenUsage = useMemo(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
   const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
+  const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
 
   const selectNode = (id: string | null): void => {
     setSelectedNodeId(id);
@@ -244,6 +259,9 @@ export function App(): JSX.Element {
       <div className="toolbar">
         <strong>Agent Orchestrator</strong>
         <span style={{ opacity: 0.6 }}>· {workflow.name} · {workflow.nodes.length} nodes</span>
+        <span className="usage-chip" title="Total recorded token usage for loaded ledger entries">
+          Tokens {formatTokenCount(tokenUsage.total.totalTokens)}
+        </span>
         <div className="spacer" />
         <button className="secondary" onClick={() => setView(view === "graph" ? "json" : "graph")}>
           {view === "graph" ? "View as JSON" : "View as Graph"}
@@ -287,6 +305,7 @@ export function App(): JSX.Element {
               onDelete={() => deleteNode(selectedNode.id)}
             />
             <NodeActivityPanel activity={selectedActivity} />
+            <NodeUsagePanel usage={selectedUsage ?? emptyUsage()} />
           </>
         ) : selectedEdge ? (
           <ConnectionPanel
@@ -336,11 +355,40 @@ export function App(): JSX.Element {
             <p style={{ marginTop: 16, opacity: 0.7, fontSize: 11 }}>
               Click a node to edit its fields. Drag from a node's right edge to another node to create an edge.
             </p>
+            <WorkflowUsagePanel usage={tokenUsage.total} />
           </div>
         )}
       </div>
 
       <LedgerPanel entries={ledger} />
+    </div>
+  );
+}
+
+function NodeUsagePanel({ usage }: { usage: TokenUsageSummary }): JSX.Element {
+  return (
+    <div className="activity-panel">
+      <h3>Token Usage</h3>
+      {usage.runs > 0 ? (
+        <>
+          <div className="usage-total">{formatTokenCount(usage.totalTokens)}</div>
+          <p className="field-note">Input: {formatTokenCount(usage.inputTokens)} · Output: {formatTokenCount(usage.outputTokens)}</p>
+          <p className="field-note">Runs: {usage.runs}{usage.estimatedRuns > 0 ? ` · estimated: ${usage.estimatedRuns}` : ""}</p>
+        </>
+      ) : (
+        <p className="field-note">No token usage recorded yet.</p>
+      )}
+    </div>
+  );
+}
+
+function WorkflowUsagePanel({ usage }: { usage: TokenUsageSummary }): JSX.Element {
+  return (
+    <div className="activity-panel">
+      <h3>Workflow Usage</h3>
+      <div className="usage-total">{formatTokenCount(usage.totalTokens)}</div>
+      <p className="field-note">Input: {formatTokenCount(usage.inputTokens)} · Output: {formatTokenCount(usage.outputTokens)}</p>
+      <p className="field-note">Runs: {usage.runs}{usage.estimatedRuns > 0 ? ` · estimated: ${usage.estimatedRuns}` : ""}</p>
     </div>
   );
 }
@@ -399,6 +447,47 @@ function buildNodeActivity(workflow: Workflow, entries: LedgerEntry[]): Record<s
     activity[next.nodeId] = next.activity;
   }
   return activity;
+}
+
+function buildTokenUsage(workflow: Workflow, entries: LedgerEntry[]): WorkflowTokenUsage {
+  const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+  const byNode: Record<string, TokenUsageSummary> = {};
+  const total = emptyUsage();
+  for (const entry of entries) {
+    if (entry.type !== "usage.recorded") continue;
+    const node = typeof entry.node === "string" ? entry.node : undefined;
+    if (!node || !nodeIds.has(node)) continue;
+    const usage = byNode[node] ?? (byNode[node] = emptyUsage());
+    const inputTokens = numberField(entry.inputTokens);
+    const outputTokens = numberField(entry.outputTokens);
+    const totalTokens = numberField(entry.totalTokens) || inputTokens + outputTokens;
+    const estimated = entry.estimated === true;
+    addUsage(usage, inputTokens, outputTokens, totalTokens, estimated);
+    addUsage(total, inputTokens, outputTokens, totalTokens, estimated);
+  }
+  return { total, byNode };
+}
+
+function emptyUsage(): TokenUsageSummary {
+  return { inputTokens: 0, outputTokens: 0, totalTokens: 0, runs: 0, estimatedRuns: 0 };
+}
+
+function addUsage(
+  usage: TokenUsageSummary,
+  inputTokens: number,
+  outputTokens: number,
+  totalTokens: number,
+  estimated: boolean
+): void {
+  usage.inputTokens += inputTokens;
+  usage.outputTokens += outputTokens;
+  usage.totalTokens += totalTokens;
+  usage.runs += 1;
+  if (estimated) usage.estimatedRuns += 1;
+}
+
+function numberField(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
 function activityFromEntry(
@@ -551,6 +640,13 @@ function sessionDetail(entry: LedgerEntry): string {
   const responseLength = typeof entry.responseLength === "number" ? entry.responseLength : 0;
   const handoffText = drained > 0 ? ` Drained ${drained} handoff(s).` : "";
   return responseLength > 0 ? `Response: ${responseLength} chars.${handoffText}` : `Session completed.${handoffText}`;
+}
+
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(2)}M`;
+  if (tokens >= 10_000) return `${Math.round(tokens / 1_000)}K`;
+  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
+  return String(tokens);
 }
 
 function retryDetail(entry: LedgerEntry): string {

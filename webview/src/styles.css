@@ -56,6 +56,19 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 }
 
 .toolbar .spacer { flex: 1; }
+.toolbar .usage-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  font-size: 11px;
+}
 
 .canvas {
   position: relative;
@@ -99,6 +112,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 .side-panel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
 .side-panel label { display: block; margin: 8px 0 4px; font-size: 11px; opacity: 0.85; }
 .side-panel .field-note { margin: 6px 0 0; font-size: 11px; opacity: 0.72; line-height: 1.35; }
+.side-panel .usage-total { font-size: 18px; font-weight: 650; line-height: 1.2; }
 .side-panel .row { display: flex; gap: 6px; }
 .side-panel .row > * { flex: 1; }
 .side-panel .trigger-list { margin-top: 8px; }

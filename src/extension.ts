@@ -149,7 +149,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
     },
-    tailLedger: async () => (ledger ? ledger.tail(200) : []),
+    tailLedger: async () => (ledger ? ledger.tail(2000) : []),
     onLedgerEntry: (cb) => (ledger ? ledger.onAppend(cb) : () => undefined)
   });
 

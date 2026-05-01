@@ -43,6 +43,7 @@ test("headless run attempt records phases, runs hooks, and routes through node r
       "attempt.phase",
       "trigger.fired",
       "session.spawned",
+      "usage.recorded",
       "handoff.emitted",
       "handoff.delivered",
       "attempt.phase",

@@ -42266,7 +42266,7 @@
             break;
           case "ledger.append":
             setNowMs(Date.now());
-            setLedger((prev) => [...prev.slice(-499), msg.entry]);
+            setLedger((prev) => [...prev.slice(-1999), msg.entry]);
             break;
           case "node.runResult":
             setStatus(msg.ok ? `Ran node ${msg.nodeId}.` : `Run failed: ${msg.error}`);
@@ -42313,7 +42313,9 @@
     );
     const activityByNode = (0, import_react8.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
     const activityByEdge = (0, import_react8.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
+    const tokenUsage = (0, import_react8.useMemo)(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
     const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
+    const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
     const selectNode = (id2) => {
       setSelectedNodeId(id2);
       setSelectedEdgeId(null);
@@ -42405,6 +42407,10 @@
           workflow.nodes.length,
           " nodes"
         ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "usage-chip", title: "Total recorded token usage for loaded ledger entries", children: [
+          "Tokens ",
+          formatTokenCount(tokenUsage.total.totalTokens)
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "spacer" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { className: "secondary", onClick: () => setView(view === "graph" ? "json" : "graph"), children: view === "graph" ? "View as JSON" : "View as Graph" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { onClick: addNode, children: "+ Node" }),
@@ -42441,7 +42447,8 @@
             onDelete: () => deleteNode(selectedNode.id)
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() })
       ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
         ConnectionPanel,
         {
@@ -42496,9 +42503,46 @@
             }
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: { marginTop: 16, opacity: 0.7, fontSize: 11 }, children: "Click a node to edit its fields. Drag from a node's right edge to another node to create an edge." })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: { marginTop: 16, opacity: 0.7, fontSize: 11 }, children: "Click a node to edit its fields. Drag from a node's right edge to another node to create an edge." }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WorkflowUsagePanel, { usage: tokenUsage.total })
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
+    ] });
+  }
+  function NodeUsagePanel({ usage }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Token Usage" }),
+      usage.runs > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "usage-total", children: formatTokenCount(usage.totalTokens) }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Input: ",
+          formatTokenCount(usage.inputTokens),
+          " \xB7 Output: ",
+          formatTokenCount(usage.outputTokens)
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Runs: ",
+          usage.runs,
+          usage.estimatedRuns > 0 ? ` \xB7 estimated: ${usage.estimatedRuns}` : ""
+        ] })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "field-note", children: "No token usage recorded yet." })
+    ] });
+  }
+  function WorkflowUsagePanel({ usage }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Workflow Usage" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "usage-total", children: formatTokenCount(usage.totalTokens) }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+        "Input: ",
+        formatTokenCount(usage.inputTokens),
+        " \xB7 Output: ",
+        formatTokenCount(usage.outputTokens)
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+        "Runs: ",
+        usage.runs,
+        usage.estimatedRuns > 0 ? ` \xB7 estimated: ${usage.estimatedRuns}` : ""
+      ] })
     ] });
   }
   function ConnectionPanel({
@@ -42548,6 +42592,37 @@
       activity[next.nodeId] = next.activity;
     }
     return activity;
+  }
+  function buildTokenUsage(workflow, entries) {
+    const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+    const byNode = {};
+    const total = emptyUsage();
+    for (const entry of entries) {
+      if (entry.type !== "usage.recorded") continue;
+      const node = typeof entry.node === "string" ? entry.node : void 0;
+      if (!node || !nodeIds.has(node)) continue;
+      const usage = byNode[node] ?? (byNode[node] = emptyUsage());
+      const inputTokens = numberField(entry.inputTokens);
+      const outputTokens = numberField(entry.outputTokens);
+      const totalTokens = numberField(entry.totalTokens) || inputTokens + outputTokens;
+      const estimated = entry.estimated === true;
+      addUsage(usage, inputTokens, outputTokens, totalTokens, estimated);
+      addUsage(total, inputTokens, outputTokens, totalTokens, estimated);
+    }
+    return { total, byNode };
+  }
+  function emptyUsage() {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, runs: 0, estimatedRuns: 0 };
+  }
+  function addUsage(usage, inputTokens, outputTokens, totalTokens, estimated) {
+    usage.inputTokens += inputTokens;
+    usage.outputTokens += outputTokens;
+    usage.totalTokens += totalTokens;
+    usage.runs += 1;
+    if (estimated) usage.estimatedRuns += 1;
+  }
+  function numberField(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
   }
   function activityFromEntry(entry, nodeIds) {
     const node = typeof entry.node === "string" ? entry.node : void 0;
@@ -42693,6 +42768,12 @@
     const responseLength = typeof entry.responseLength === "number" ? entry.responseLength : 0;
     const handoffText = drained > 0 ? ` Drained ${drained} handoff(s).` : "";
     return responseLength > 0 ? `Response: ${responseLength} chars.${handoffText}` : `Session completed.${handoffText}`;
+  }
+  function formatTokenCount(tokens) {
+    if (tokens >= 1e6) return `${(tokens / 1e6).toFixed(2)}M`;
+    if (tokens >= 1e4) return `${Math.round(tokens / 1e3)}K`;
+    if (tokens >= 1e3) return `${(tokens / 1e3).toFixed(1)}K`;
+    return String(tokens);
   }
   function retryDetail(entry) {
     const detail = entry.detail ?? {};

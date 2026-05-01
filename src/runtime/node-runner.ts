@@ -5,6 +5,7 @@ import type { MessageBus } from "../orchestration/message-bus.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { writeNodeFileArtifacts, type FileArtifactResult } from "./file-artifacts.js";
 import { takeRetryState } from "./retry-state.js";
+import { countMessageTokens, countTextTokens, type TokenCountResult } from "./token-usage.js";
 
 const TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
 const HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
@@ -19,6 +20,7 @@ export interface RuntimeLanguageModel {
   name: string;
   vendor?: string;
   family?: string;
+  countTokens?(input: RuntimeChatMessage[] | string): Promise<number>;
   sendRequest(messages: RuntimeChatMessage[]): AsyncIterable<string>;
 }
 
@@ -167,15 +169,28 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
   }
 
   let assistantText = "";
-  let model: RuntimeLanguageModel;
+  let model: RuntimeLanguageModel | null = null;
+  let inputTokenCount: TokenCountResult | null = null;
   try {
     model = await deps.modelProvider.selectModel(modelSelector);
+    inputTokenCount = await countMessageTokens(model, messages);
     for await (const fragment of model.sendRequest(messages)) {
       assistantText += fragment;
       await emit(fragment);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (inputTokenCount && model) {
+      await recordUsage({
+        deps,
+        node,
+        eventId,
+        model,
+        inputTokenCount,
+        outputTokenCount: await countTextTokens(model, assistantText),
+        status: "errored"
+      });
+    }
     await deps.ledger.append({
       type: "session.errored",
       node: node.id,
@@ -197,6 +212,16 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
     promptLength: systemContent.length + userContent.length,
     responseLength: assistantText.length,
     drainedHandoffs: drained.length
+  });
+
+  await recordUsage({
+    deps,
+    node,
+    eventId,
+    model,
+    inputTokenCount: inputTokenCount ?? (await countMessageTokens(model, messages)),
+    outputTokenCount: await countTextTokens(model, assistantText),
+    status: "completed"
   });
 
   const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
@@ -250,6 +275,34 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
     drainedHandoffs: drained.length,
     fileArtifacts
   };
+}
+
+async function recordUsage(args: {
+  deps: NodeRunnerDeps;
+  node: WorkflowNode;
+  eventId: string;
+  model: RuntimeLanguageModel;
+  inputTokenCount: TokenCountResult;
+  outputTokenCount: TokenCountResult;
+  status: "completed" | "errored";
+}): Promise<void> {
+  await args.deps.ledger.append({
+    type: "usage.recorded",
+    node: args.node.id,
+    eventId: args.eventId,
+    model: args.model.id,
+    modelVendor: args.model.vendor,
+    modelFamily: args.model.family,
+    inputTokens: args.inputTokenCount.tokens,
+    outputTokens: args.outputTokenCount.tokens,
+    totalTokens: args.inputTokenCount.tokens + args.outputTokenCount.tokens,
+    estimated: args.inputTokenCount.estimated || args.outputTokenCount.estimated,
+    detail: {
+      status: args.status,
+      inputEstimated: args.inputTokenCount.estimated,
+      outputEstimated: args.outputTokenCount.estimated
+    }
+  });
 }
 
 async function writeArtifacts(args: {

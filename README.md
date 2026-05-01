@@ -93,6 +93,8 @@ If a node hits a usage or rate limit and the error includes text like `Try again
 
 Scheduled triggers (`timer` and `interval`) also check outgoing graph-edge targets before opening chat. If a Project Manager timer fires while an output node such as Lead Dev is still `running`, the dispatch is skipped with a `downstream-running` guardrail entry and the timer waits for its next tick instead of piling up another task.
 
+The graph also records token usage per node run. Inside VS Code, the extension uses the selected model's native `countTokens` API for prompt and response counts; headless/mock runs fall back to a deterministic estimate. Usage appears as a total in the graph toolbar, a workflow total in the side panel, and a per-node total when a node is selected. The raw ledger event is `usage.recorded` with input, output, total, model, and estimated fields.
+
 ### 6. What to tell the user after setup
 
 Use this plain-language summary:
@@ -191,6 +193,8 @@ Each node has an optional `model` selector (`vendor` / `family` / `id`) that map
 Nodes can also set `model.reasoningEffort` to `none`, `low`, `medium`, `high`, or `xhigh`. In VS Code this is passed through as the Copilot-style `reasoningEffort` model option, matching the native Thinking Effort menu when the selected model supports it.
 
 When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session. Tool calls are capped by the `vscodeAgentOrchestrator.toolRoundLimit` setting, which defaults to `16` rounds and can be raised up to `50` for MCP-heavy runs. If the same tool call fails twice with the same input and error, the orchestrator stops the run early to avoid retry loops. Usage-limit errors that say `try again in ...` are retried automatically one minute after the requested wait. The `vscodeAgentOrchestrator.blockedTools` setting controls the small default blocklist of known-problem native tools; set it to `[]` to expose all registered tools.
+
+Each completed or errored node run writes a `usage.recorded` ledger entry. VS Code runs use the selected language model's `countTokens` API; headless and mock providers use a local estimate. The graph editor aggregates those entries into a workflow token total and a per-node usage panel.
 
 ## Quick start
 

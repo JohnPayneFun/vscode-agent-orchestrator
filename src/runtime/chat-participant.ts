@@ -284,6 +284,11 @@ function createVsCodeModelProvider(
         name: model.name,
         vendor: model.vendor,
         family: model.family,
+        async countTokens(input: RuntimeChatMessage[] | string): Promise<number> {
+          if (typeof input === "string") return model.countTokens(input, token);
+          const counts = await Promise.all(input.map((message) => model.countTokens(toVsCodeMessage(message), token)));
+          return counts.reduce((sum, count) => sum + count, 0);
+        },
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = exposedTools(vscode.lm.tools, blockedTools).map(toLanguageModelChatTool);

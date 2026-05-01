@@ -17696,6 +17696,32 @@ function retryStatePath(p, id) {
   return path11.join(p.retriesRoot, `${id}.json`);
 }
 
+// src/runtime/token-usage.ts
+async function countMessageTokens(model, messages) {
+  if (model.countTokens) {
+    try {
+      return { tokens: await model.countTokens(messages), estimated: false };
+    } catch {
+    }
+  }
+  return { tokens: estimateTokens(messages.map((message) => message.content).join("\n\n")), estimated: true };
+}
+async function countTextTokens(model, text) {
+  if (model.countTokens) {
+    try {
+      return { tokens: await model.countTokens(text), estimated: false };
+    } catch {
+    }
+  }
+  return { tokens: estimateTokens(text), estimated: true };
+}
+function estimateTokens(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return 0;
+  const wordishTokens = trimmed.match(/[\p{L}\p{N}_]+|[^\s\p{L}\p{N}_]/gu)?.length ?? 0;
+  return Math.max(1, Math.ceil(wordishTokens * 1.25));
+}
+
 // src/runtime/node-runner.ts
 var TRIGGER_TAG_RE = /\[triggered:(\w+)(?::([^\]]+))?\]/;
 var HANDOFF_BLOCK_RE = /<<HANDOFF\s+target=([a-zA-Z0-9_-]+)>>([\s\S]*?)<<END>>/g;
@@ -17793,15 +17819,28 @@ async function runWorkflowNode(args) {
     };
   }
   let assistantText = "";
-  let model;
+  let model = null;
+  let inputTokenCount = null;
   try {
     model = await deps.modelProvider.selectModel(modelSelector);
+    inputTokenCount = await countMessageTokens(model, messages);
     for await (const fragment of model.sendRequest(messages)) {
       assistantText += fragment;
       await emit(fragment);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (inputTokenCount && model) {
+      await recordUsage({
+        deps,
+        node,
+        eventId,
+        model,
+        inputTokenCount,
+        outputTokenCount: await countTextTokens(model, assistantText),
+        status: "errored"
+      });
+    }
     await deps.ledger.append({
       type: "session.errored",
       node: node.id,
@@ -17822,6 +17861,15 @@ async function runWorkflowNode(args) {
     promptLength: systemContent.length + userContent.length,
     responseLength: assistantText.length,
     drainedHandoffs: drained.length
+  });
+  await recordUsage({
+    deps,
+    node,
+    eventId,
+    model,
+    inputTokenCount: inputTokenCount ?? await countMessageTokens(model, messages),
+    outputTokenCount: await countTextTokens(model, assistantText),
+    status: "completed"
   });
   const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
   const explicitHandoffs = parseHandoffs(assistantText);
@@ -17877,6 +17925,25 @@ async function runWorkflowNode(args) {
     drainedHandoffs: drained.length,
     fileArtifacts
   };
+}
+async function recordUsage(args) {
+  await args.deps.ledger.append({
+    type: "usage.recorded",
+    node: args.node.id,
+    eventId: args.eventId,
+    model: args.model.id,
+    modelVendor: args.model.vendor,
+    modelFamily: args.model.family,
+    inputTokens: args.inputTokenCount.tokens,
+    outputTokens: args.outputTokenCount.tokens,
+    totalTokens: args.inputTokenCount.tokens + args.outputTokenCount.tokens,
+    estimated: args.inputTokenCount.estimated || args.outputTokenCount.estimated,
+    detail: {
+      status: args.status,
+      inputEstimated: args.inputTokenCount.estimated,
+      outputEstimated: args.outputTokenCount.estimated
+    }
+  });
 }
 async function writeArtifacts(args) {
   try {
@@ -18340,6 +18407,11 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
         name: model.name,
         vendor: model.vendor,
         family: model.family,
+        async countTokens(input) {
+          if (typeof input === "string") return model.countTokens(input, token);
+          const counts = await Promise.all(input.map((message) => model.countTokens(toVsCodeMessage(message), token)));
+          return counts.reduce((sum, count) => sum + count, 0);
+        },
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = exposedTools(vscode7.lm.tools, blockedTools).map(toLanguageModelChatTool);
@@ -18562,7 +18634,7 @@ var GraphPanelManager = class {
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
         const tail = await this.deps.tailLedger();
-        for (const entry of tail.slice(-50)) {
+        for (const entry of tail) {
           this.post(panel, { type: "ledger.append", entry });
         }
         return;
@@ -18800,7 +18872,7 @@ async function activate(context) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
     },
-    tailLedger: async () => ledger ? ledger.tail(200) : [],
+    tailLedger: async () => ledger ? ledger.tail(2e3) : [],
     onLedgerEntry: (cb) => ledger ? ledger.onAppend(cb) : () => void 0
   });
   context.subscriptions.push(

@@ -54,12 +54,15 @@ test("node runner executes without VS Code and routes graph-edge handoffs", asyn
     assert.deepEqual(entries.map((entry) => entry.type), [
       "trigger.fired",
       "session.spawned",
+      "usage.recorded",
       "handoff.emitted",
       "handoff.delivered"
     ]);
     assert.equal(entries[0].node, "node_1");
     assert.equal((entries[0].detail as Record<string, unknown>).source, "headless-test");
     assert.equal(entries[1].spawner, "headless-test");
+    assert.equal(entries[2].node, "node_1");
+    assert.equal(typeof entries[2].totalTokens, "number");
   });
 });
 
@@ -102,10 +105,11 @@ test("node runner drains handoffs and writes file artifacts headlessly", async (
       "trigger.fired",
       "handoff.consumed",
       "session.spawned",
+      "usage.recorded",
       "file.written"
     ]);
     assert.equal(entries[0].trigger, "handoff");
-    assert.equal(entries[3].path, targetPath);
+    assert.equal(entries[4].path, targetPath);
   });
 });
 

@@ -630,6 +630,19 @@ textarea {
 .toolbar .spacer {
   flex: 1;
 }
+.toolbar .usage-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  font-size: 11px;
+}
 .canvas {
   position: relative;
   overflow: hidden;
@@ -686,6 +699,11 @@ textarea {
   font-size: 11px;
   opacity: 0.72;
   line-height: 1.35;
+}
+.side-panel .usage-total {
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 .side-panel .row {
   display: flex;

@@ -85,7 +85,7 @@ export class GraphPanelManager {
         const models = await this.deps.listModels();
         this.post(panel, { type: "models.list", models });
         const tail = await this.deps.tailLedger();
-        for (const entry of tail.slice(-50)) {
+        for (const entry of tail) {
           this.post(panel, { type: "ledger.append", entry });
         }
         return;
