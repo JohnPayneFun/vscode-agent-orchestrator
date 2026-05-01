@@ -4,6 +4,108 @@ A graph-based orchestrator for multi-agent workflows in VS Code. Define personas
 
 Model-agnostic by design. Anything VS Code's chat picker can talk to (Copilot's GPT-4o, Claude via your Copilot subscription, Gemini, local models registered as language model providers, ...) just works — there's nothing Claude-specific in the runtime.
 
+## LLM bootstrap runbook
+
+If a user drops this repository link into a VS Code chat session and asks you to set it up, treat this section as the operating guide. The extension is not published to the Marketplace yet; install it by cloning, building, packaging, and installing the local VSIX.
+
+### 1. Install the extension for the user
+
+Run these commands from a terminal. On Windows PowerShell:
+
+```powershell
+git clone https://github.com/JohnPayneFun/vscode-agent-orchestrator.git
+Set-Location vscode-agent-orchestrator
+npm install
+npm run install:local
+```
+
+On macOS/Linux shells:
+
+```sh
+git clone https://github.com/JohnPayneFun/vscode-agent-orchestrator.git
+cd vscode-agent-orchestrator
+npm install
+npm run install:local
+```
+
+If the repository is already cloned, skip `git clone`, enter the existing folder, run `git pull`, then run `npm install` and `npm run install:local`.
+
+After `npm run install:local` succeeds, tell the user to run **Developer: Reload Window**. The installed extension id is `jpc-local.vscode-agent-orchestrator`.
+
+### 2. Open the workspace to orchestrate
+
+The orchestrator stores workflow state inside the currently opened workspace, not inside the extension repository unless the user is testing the extension itself. Open the project folder where the agents should work, then run **Agent Orchestrator: Open Graph Editor** from the Command Palette.
+
+Opening the graph editor initializes this workspace layout as needed:
+
+```text
+.agent-orchestrator/
+├── workflows.json
+├── inbox/<node>/*.json
+├── outbox/<node>/*.json
+├── ledger.jsonl
+└── runtime/workflow.schema.json
+```
+
+### 3. Create a first workflow
+
+In the graph editor:
+
+1. Add a node for each role, such as `PM`, `Lead Dev`, `QA`, or `Security`.
+2. Pick the node's VS Code Agent from the **Agent** dropdown when custom agents are available.
+3. Leave **Model** blank to use the user's native VS Code chat model picker, or choose a model per node.
+4. Set **Thinking effort** if the selected model supports it.
+5. Set **On Trigger** to `Manual`, `New Message`, `Timer`, `Webhook`, or another trigger.
+6. Use `+ OR` under a trigger when a node needs multiple inputs, such as `New Message OR Timer`.
+7. Connect node outputs to node inputs with graph edges for automatic handoffs.
+8. Save the workflow.
+
+### 4. Run and validate
+
+Use any of these paths:
+
+```text
+Command Palette -> Agent Orchestrator: Run Node Manually
+Graph editor -> select a node -> Run selected
+Native VS Code Chat -> @orchestrator /list
+Native VS Code Chat -> @orchestrator /run <node label or id> <optional task text>
+```
+
+Example chat commands:
+
+```text
+@orchestrator /list
+@orchestrator /run PM check Monday for status updates and hand off implementation work
+@orchestrator /run Lead Dev summarize the latest handoff
+```
+
+Watch the graph activity and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
+
+### 5. MCP and tools
+
+When running inside VS Code, orchestrated nodes can use registered VS Code language-model tools, including MCP tools, through the same chat/tool system used by native Agent mode. If VS Code shows a message such as an MCP server may have new tools or needs to be started, tell the user to click **Start it now**.
+
+For MCP-heavy flows, especially Monday.com project-manager nodes, set `vscodeAgentOrchestrator.toolRoundLimit` higher if the node needs many tool calls. The default is `16`; the maximum is `50`.
+
+### 6. What to tell the user after setup
+
+Use this plain-language summary:
+
+```text
+I installed the Agent Orchestrator extension locally, reloaded VS Code, and opened the graph editor. You create agent workflows as nodes, choose each node's agent/model/trigger, connect nodes with edges, and run them from the graph or with @orchestrator /run <node>. The workflow state lives in .agent-orchestrator/ inside your project, and the ledger shows what fired, what ran, and what was handed off.
+```
+
+### 7. Developer validation commands
+
+When changing this repository, validate before handing work back:
+
+```sh
+npm test
+npm run build
+npm run install:local
+git status --short --branch
+```
+
 ## How it works
 
 Each node in your graph maps to an invocation of a single chat participant, **`@orchestrator`**. When a trigger fires, the orchestrator opens the native chat panel with the query prefilled:
@@ -173,6 +275,7 @@ Hooks run from the workspace root. `beforeRun` failures fail the attempt; `after
 | `vscodeAgentOrchestrator.enabled` | `true` | Master kill switch — when false, no triggers fire |
 | `vscodeAgentOrchestrator.dryRun` | `false` | Log dispatch intents but don't open chats |
 | `vscodeAgentOrchestrator.ghPollSeconds` | `60` | GitHub PR polling interval (min 15) |
+| `vscodeAgentOrchestrator.toolRoundLimit` | `16` | Maximum model/tool-call rounds per node run (1-50) |
 
 ## Why a graph editor and not just `chat.md` files?
 
