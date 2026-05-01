@@ -705,6 +705,26 @@ textarea {
   font-weight: 650;
   line-height: 1.2;
 }
+.side-panel .tool-breakdown {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.side-panel .tool-breakdown li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+}
+.side-panel .tool-breakdown span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .side-panel .row {
   display: flex;
   gap: 6px;

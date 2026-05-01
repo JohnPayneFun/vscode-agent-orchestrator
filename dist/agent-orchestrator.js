@@ -8693,6 +8693,7 @@ var WORKFLOW_SCHEMA = {
               }
             ]
           },
+          toolRoundLimit: { type: ["integer", "null"], minimum: 1, maximum: 200 },
           display: {
             type: "object",
             additionalProperties: false,
@@ -9193,6 +9194,7 @@ async function runWorkflowNode(args) {
         outputTokenCount: await countTextTokens(model, assistantText),
         status: "errored"
       });
+      await recordToolUsage({ deps, node, eventId, model, status: "errored" });
     }
     await deps.ledger.append({
       type: "session.errored",
@@ -9224,6 +9226,7 @@ async function runWorkflowNode(args) {
     outputTokenCount: await countTextTokens(model, assistantText),
     status: "completed"
   });
+  await recordToolUsage({ deps, node, eventId, model, status: "completed" });
   const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
   const explicitHandoffs = parseHandoffs(assistantText);
   const graphHandoffs = explicitHandoffs.length > 0 ? [] : buildGraphHandoffs(deps.getWorkflow(), node, assistantText);
@@ -9296,6 +9299,25 @@ async function recordUsage(args) {
       inputEstimated: args.inputTokenCount.estimated,
       outputEstimated: args.outputTokenCount.estimated
     }
+  });
+}
+async function recordToolUsage(args) {
+  const stats = args.model.toolCallStats;
+  if (!stats || stats.calls === 0 && !stats.reachedLimit) return;
+  await args.deps.ledger.append({
+    type: "toolUsage.recorded",
+    node: args.node.id,
+    eventId: args.eventId,
+    model: args.model.id,
+    modelVendor: args.model.vendor,
+    modelFamily: args.model.family,
+    toolCalls: stats.calls,
+    toolRounds: stats.rounds,
+    failedToolCalls: stats.failures,
+    toolRoundLimit: stats.limit,
+    reachedLimit: stats.reachedLimit === true,
+    tools: Object.entries(stats.tools).map(([name, tool]) => ({ name, calls: tool.calls, failures: tool.failures })),
+    detail: { status: args.status }
   });
 }
 async function writeArtifacts(args) {

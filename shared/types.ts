@@ -109,6 +109,7 @@ export interface WorkflowNode {
    * picked in the chat model dropdown).
    */
   model?: ModelSelector | null;
+  toolRoundLimit?: number | null;
   display?: WorkflowNodeDisplay;
   position: NodePosition;
   enabled: boolean;
@@ -194,6 +195,7 @@ export type LedgerEventType =
   | "session.spawned"
   | "session.errored"
   | "usage.recorded"
+  | "toolUsage.recorded"
   | "retry.scheduled"
   | "retry.restored"
   | "handoff.emitted"

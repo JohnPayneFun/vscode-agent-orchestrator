@@ -4,16 +4,23 @@ import type { Ledger } from "../orchestration/ledger.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../orchestration/node-resolver.js";
-import { runWorkflowNode, WorkflowNodeRunError, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
+import {
+  runWorkflowNode,
+  WorkflowNodeRunError,
+  type RuntimeChatMessage,
+  type RuntimeModelProvider,
+  type RuntimeToolCallStats
+} from "./node-runner.js";
 import { retryQuery, scheduleRetryChat } from "./retry-chat.js";
-import { saveRetryState } from "./retry-state.js";
+import { saveRetryState, takeLatestRetryStateForNode } from "./retry-state.js";
 import { DEFAULT_BLOCKED_TOOL_NAMES, exposedTools } from "./tool-filter.js";
 import { parseUsageLimitRetry } from "./usage-limit.js";
 
-const DEFAULT_TOOL_ROUND_LIMIT = 16;
+const DEFAULT_TOOL_ROUND_LIMIT = 64;
 const MIN_TOOL_ROUND_LIMIT = 1;
-const MAX_TOOL_ROUND_LIMIT = 50;
+const MAX_TOOL_ROUND_LIMIT = 200;
 const REPEATED_TOOL_FAILURE_LIMIT = 2;
+const TOOL_ROUND_LIMIT_RE = /tool round limit|Stopped after \d+ tool round/i;
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
@@ -39,6 +46,8 @@ export interface ChatParticipantDeps {
  *        trigger and the chain continues).
  *   @orchestrator <node-label-or-id> ...
  *     → equivalent to /run <node-id> ... (slash command optional).
+ *   @orchestrator /resume <node-label-or-id>
+ *     → resume the latest saved run for a node that hit the tool-round cap.
  */
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
@@ -56,7 +65,8 @@ export function registerChatParticipant(
       // Both `/run Security ...` and `Security ...` work.
       let rawNodeReference: string;
       let userText: string;
-      if (command === "run" || !command) {
+      let resumeRequested = command === "resume";
+      if (command === "run" || command === "resume" || !command) {
         const split = prompt.split(/\s+/);
         rawNodeReference = split[0] ?? "";
         userText = split.slice(1).join(" ").trim();
@@ -72,9 +82,14 @@ export function registerChatParticipant(
         );
         return {};
       }
-      const parsedRun = command === "run" || !command ? parseRunPrompt(workflow, prompt) : null;
+      const parsedRun = command === "run" || command === "resume" || !command ? parseRunPrompt(workflow, prompt) : null;
       const nodeReference = parsedRun?.nodeReference ?? rawNodeReference;
       userText = parsedRun?.userText ?? userText;
+      const resumeText = parseResumeText(userText);
+      if (resumeText !== null) {
+        resumeRequested = true;
+        userText = resumeText;
+      }
       const resolution = resolveWorkflowNode(workflow, nodeReference);
       if (resolution.reason === "ambiguous") {
         stream.markdown(
@@ -97,6 +112,10 @@ export function registerChatParticipant(
       if (!node.enabled) {
         stream.markdown(`Node \`${formatNodeReference(node)}\` is disabled. Enable it in the graph editor first.`);
         return {};
+      }
+
+      if (resumeRequested) {
+        return await resumeNode({ context, deps, node, request, ctx, stream, token, userText });
       }
 
       return await runNode({ context, deps, node, request, ctx, stream, token, userText });
@@ -137,6 +156,14 @@ function listNodes(deps: ChatParticipantDeps, stream: vscode.ChatResponseStream)
   return {};
 }
 
+function parseResumeText(userText: string): string | null {
+  const trimmed = userText.trim();
+  if (!trimmed) return null;
+  if (/^resume$/i.test(trimmed)) return "";
+  const match = trimmed.match(/^resume\s+(.+)$/i);
+  return match ? match[1]?.trim() ?? "" : null;
+}
+
 function parseRunPrompt(workflow: Workflow, prompt: string): { nodeReference: string; userText: string } {
   const words = prompt.trim().split(/\s+/).filter(Boolean);
   for (let count = words.length; count > 0; count--) {
@@ -175,7 +202,7 @@ interface RunArgs {
 async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const { context, deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
-  const toolRoundLimit = clampToolRoundLimit(config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
+  const toolRoundLimit = resolveToolRoundLimit(node.toolRoundLimit, config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
@@ -192,6 +219,8 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   } catch (err) {
     const scheduledRetry = await scheduleUsageLimitRetry({ context, deps, node, err, stream });
     if (scheduledRetry) return { metadata: { nodeId: node.id, retryId: scheduledRetry.retryId, retryAt: scheduledRetry.retryAt } };
+    const resumableRun = await saveToolRoundLimitResume({ deps, node, err, stream });
+    if (resumableRun) return { metadata: { nodeId: node.id, retryId: resumableRun.retryId, retryAt: resumableRun.retryAt } };
     if (err instanceof vscode.LanguageModelError) {
       stream.markdown(
         `\n\n**LanguageModelError:** ${err.code} — ${err.message}\n\nCheck that you've selected a model in the chat picker and that you have access (e.g. GitHub Copilot subscription).`
@@ -201,6 +230,68 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
       throw err;
     }
   }
+}
+
+async function resumeNode(args: RunArgs): Promise<vscode.ChatResult> {
+  const retryState = await takeLatestRetryStateForNode(args.deps.paths, args.node.id, "toolRoundLimit");
+  if (!retryState) {
+    args.stream.markdown(
+      `No saved resumable run found for \`${formatNodeReference(args.node)}\`. A run becomes resumable when it reaches \`vscodeAgentOrchestrator.toolRoundLimit\`.`
+    );
+    return {};
+  }
+
+  const extra = args.userText.trim();
+  const resumeInstruction = [
+    `[triggered:manual:retryId=${retryState.id},resume=1]`,
+    "Resume the saved run from the last completed external state. First inspect current Git, PR, filesystem, and MCP state; then continue only the remaining work. Do not repeat completed work unless verification shows it is missing.",
+    extra ? `Additional resume instruction: ${extra}` : ""
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  args.stream.markdown(`Resuming saved run \`${retryState.id}\` for \`${formatNodeReference(args.node)}\`.\n\n`);
+  return runNode({ ...args, userText: resumeInstruction });
+}
+
+async function saveToolRoundLimitResume(args: {
+  deps: ChatParticipantDeps;
+  node: WorkflowNode;
+  err: unknown;
+  stream: vscode.ChatResponseStream;
+}): Promise<{ retryId: string; retryAt: string } | null> {
+  const message = errorMessage(args.err);
+  if (!TOOL_ROUND_LIMIT_RE.test(message)) return null;
+
+  const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
+  const retryAt = new Date().toISOString();
+  const retryState = await saveRetryState(args.deps.paths, {
+    retryKind: "toolRoundLimit",
+    retryAt,
+    nodeId: args.node.id,
+    triggerType: runError?.triggerType ?? "manual",
+    userText: runError?.cleanedUserText ?? "",
+    drainedHandoffs: runError?.drainedHandoffs ?? [],
+    reason: message
+  });
+
+  await args.deps.ledger.append({
+    type: "retry.scheduled",
+    node: args.node.id,
+    eventId: runError?.eventId,
+    detail: {
+      retryId: retryState.id,
+      retryAt,
+      retryKind: retryState.retryKind,
+      manualResume: true,
+      drainedHandoffs: retryState.drainedHandoffs.length,
+      reason: message
+    }
+  });
+  args.stream.markdown(
+    `\n\n**Tool round limit reached.** Saved this run for manual resume. Continue it with \`@orchestrator /resume ${formatNodeReference(args.node)}\`, or raise this node's **Tool round limit** for longer runs.\n`
+  );
+  return { retryId: retryState.id, retryAt };
 }
 
 async function scheduleUsageLimitRetry(args: {
@@ -216,6 +307,7 @@ async function scheduleUsageLimitRetry(args: {
 
   const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
   const retryState = await saveRetryState(args.deps.paths, {
+    retryKind: "usageLimit",
     retryAt: retry.retryAt,
     nodeId: args.node.id,
     triggerType: runError?.triggerType ?? "manual",
@@ -279,11 +371,19 @@ function createVsCodeModelProvider(
   return {
     async selectModel(selector: ModelSelector | undefined) {
       const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      const toolCallStats: RuntimeToolCallStats = {
+        rounds: 0,
+        calls: 0,
+        failures: 0,
+        limit: toolRoundLimit,
+        tools: {}
+      };
       return {
         id: model.id,
         name: model.name,
         vendor: model.vendor,
         family: model.family,
+        toolCallStats,
         async countTokens(input: RuntimeChatMessage[] | string): Promise<number> {
           if (typeof input === "string") return model.countTokens(input, token);
           const counts = await Promise.all(input.map((message) => model.countTokens(toVsCodeMessage(message), token)));
@@ -311,12 +411,20 @@ function createVsCodeModelProvider(
               }
             }
             if (toolCalls.length === 0) return;
+            toolCallStats.rounds += 1;
+            toolCallStats.calls += toolCalls.length;
+            for (const toolCall of toolCalls) {
+              const toolStats = toolCallStats.tools[toolCall.name] ?? (toolCallStats.tools[toolCall.name] = { calls: 0, failures: 0 });
+              toolStats.calls += 1;
+            }
             requestMessages.push(vscode.LanguageModelChatMessage.Assistant(assistantParts));
             const toolResults: vscode.LanguageModelToolResultPart[] = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
               const outcome = await invokeToolResultPart(toolCall, request, token, stream);
               if (outcome.failureSignature) {
+                toolCallStats.failures += 1;
+                toolCallStats.tools[toolCall.name].failures += 1;
                 const failureCount = (failedToolCalls.get(outcome.failureSignature) ?? 0) + 1;
                 failedToolCalls.set(outcome.failureSignature, failureCount);
                 if (failureCount >= REPEATED_TOOL_FAILURE_LIMIT) {
@@ -329,8 +437,9 @@ function createVsCodeModelProvider(
             }
             requestMessages.push(vscode.LanguageModelChatMessage.User(toolResults));
           }
+          toolCallStats.reachedLimit = true;
           throw new Error(
-            `Stopped after ${toolRoundLimit} tool round(s). The model kept requesting tools, so the run did not complete.`
+            `Reached the configured tool round limit of ${toolRoundLimit}. The node may still be making progress; raise this node's Tool round limit or vscodeAgentOrchestrator.toolRoundLimit for longer implementation, PR, or MCP workflows.`
           );
         }
       };
@@ -347,6 +456,10 @@ interface ToolInvocationOutcome {
 function clampToolRoundLimit(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
   return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
+}
+
+function resolveToolRoundLimit(nodeLimit: number | null | undefined, configuredLimit: number): number {
+  return clampToolRoundLimit(nodeLimit ?? configuredLimit);
 }
 
 async function invokeToolResultPart(

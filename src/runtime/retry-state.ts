@@ -4,10 +4,13 @@ import { ulid } from "ulid";
 import type { HandoffPayload } from "../../shared/types.js";
 import type { OrchestrationPaths } from "../orchestration/paths.js";
 
+export type RetryKind = "usageLimit" | "toolRoundLimit";
+
 export interface RetryState {
   schemaVersion: 1;
   id: string;
   createdAt: string;
+  retryKind?: RetryKind;
   retryAt: string;
   nodeId: string;
   triggerType: string;
@@ -40,6 +43,21 @@ export async function takeRetryState(p: OrchestrationPaths, id: string): Promise
   } catch {
     return null;
   }
+}
+
+export async function takeLatestRetryStateForNode(
+  p: OrchestrationPaths,
+  nodeId: string,
+  retryKind?: RetryKind
+): Promise<RetryState | null> {
+  const states = await listRetryStates(p);
+  const match = states
+    .filter((state) => state.nodeId === nodeId && (!retryKind || state.retryKind === retryKind))
+    .sort((left, right) => {
+      const createdDelta = Date.parse(right.createdAt) - Date.parse(left.createdAt);
+      return createdDelta !== 0 ? createdDelta : right.id.localeCompare(left.id);
+    })[0];
+  return match ? takeRetryState(p, match.id) : null;
 }
 
 export async function listRetryStates(p: OrchestrationPaths): Promise<RetryState[]> {

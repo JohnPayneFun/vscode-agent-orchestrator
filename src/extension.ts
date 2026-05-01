@@ -205,6 +205,7 @@ export function deactivate(): void {
 async function resumePendingRetries(context: vscode.ExtensionContext, p: OrchestrationPaths, ledger: Ledger): Promise<void> {
   const retryStates = await listRetryStates(p);
   for (const state of retryStates) {
+    if (state.retryKind && state.retryKind !== "usageLimit") continue;
     const retryAtMs = Date.parse(state.retryAt);
     const delayMs = Number.isNaN(retryAtMs) ? 0 : retryAtMs - Date.now();
     scheduleRetryChat(context, retryQuery(state.nodeId, state.id), Math.max(0, delayMs));

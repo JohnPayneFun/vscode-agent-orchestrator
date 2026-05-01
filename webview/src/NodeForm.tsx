@@ -164,6 +164,18 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
       </select>
       {m ? <p className="field-note">{formatModelSelector(m)}</p> : null}
 
+      <h3 style={{ marginTop: 18 }}>Runtime (optional)</h3>
+      <p className="field-note">Leave blank to use the global tool-round limit.</p>
+      <label>Tool round limit</label>
+      <input
+        type="number"
+        min={1}
+        max={200}
+        value={node.toolRoundLimit ?? ""}
+        placeholder="Use global default"
+        onChange={(e) => set("toolRoundLimit", parseOptionalLimit(e.target.value))}
+      />
+
       <div className="row" style={{ marginTop: 12 }}>
         <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <input
@@ -181,6 +193,13 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
       </div>
     </div>
   );
+}
+
+function parseOptionalLimit(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(1, Math.min(200, Math.floor(parsed)));
 }
 
 function selectorFromModel(model: ModelOption): ModelSelector {

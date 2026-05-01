@@ -148,6 +148,7 @@ export const WORKFLOW_SCHEMA = {
               }
             ]
           },
+          toolRoundLimit: { type: ["integer", "null"], minimum: 1, maximum: 200 },
           display: {
             type: "object",
             additionalProperties: false,

@@ -73,6 +73,19 @@ test("workflow schema accepts node display options", () => {
   assert.equal(validate(workflow), true, formatErrors());
 });
 
+test("workflow schema accepts node tool round limits", () => {
+  const workflow = createWorkflow({ toolRoundLimit: 120 });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
+test("workflow schema rejects node tool round limits above maximum", () => {
+  const workflow = createWorkflow({ toolRoundLimit: 201 });
+
+  assert.equal(validate(workflow), false);
+  assert.match(formatErrors(), /toolRoundLimit/);
+});
+
 test("workflow schema accepts startup triggers", () => {
   const workflow = createWorkflow({ trigger: { type: "startup", delaySeconds: 5 } });
 

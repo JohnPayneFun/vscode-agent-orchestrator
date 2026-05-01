@@ -77,6 +77,8 @@ Example chat commands:
 @orchestrator /list
 @orchestrator /run PM check Monday for status updates and hand off implementation work
 @orchestrator /run Lead Dev summarize the latest handoff
+@orchestrator /resume Lead Dev
+@orchestrator Lead Dev resume
 ```
 
 Watch the graph activity and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
@@ -85,7 +87,9 @@ Watch the graph activity and ledger panel. For deeper inspection, run **Agent Or
 
 When running inside VS Code, orchestrated nodes can use registered VS Code language-model tools, including MCP tools, through the same chat/tool system used by native Agent mode. If VS Code shows a message such as an MCP server may have new tools or needs to be started, tell the user to click **Start it now**.
 
-For MCP-heavy flows, especially Monday.com project-manager nodes, set `vscodeAgentOrchestrator.toolRoundLimit` higher if the node needs many tool calls. The default is `16`; the maximum is `50`.
+For MCP-heavy or implementation-heavy flows, especially Monday.com project-manager nodes, Lead Dev PR workflows, and architect nodes that coordinate several reviewers, set the node's **Tool round limit** higher if it needs many tool calls. Blank uses the global `vscodeAgentOrchestrator.toolRoundLimit` setting. The global default is `64`; per-node and global limits can be set up to `200`.
+
+If a productive run reaches the tool-round cap, the orchestrator saves the original node run for manual resume. Continue it with `@orchestrator /resume <node label or id>` or the shorthand `@orchestrator <node label or id> resume`. Resume restores the original user text and drained handoffs, then tells the node to inspect current Git/PR/filesystem/MCP state and continue the remaining work rather than starting from scratch.
 
 Nodes should create or update files with the orchestrator's `<<WRITE_FILE path=...>>...<<END_WRITE_FILE>>` block protocol. By default, the orchestrator hides a small blocklist of registered tools that are known to break or loop in this custom participant context, including Copilot file-mutation tools such as `copilot_createFile` and planning/meta tools such as `manage_todo_list`. This is configurable with `vscodeAgentOrchestrator.blockedTools`; set it to `[]` to expose every native tool.
 
@@ -192,9 +196,13 @@ Each node has an optional `model` selector (`vendor` / `family` / `id`) that map
 
 Nodes can also set `model.reasoningEffort` to `none`, `low`, `medium`, `high`, or `xhigh`. In VS Code this is passed through as the Copilot-style `reasoningEffort` model option, matching the native Thinking Effort menu when the selected model supports it.
 
-When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session. Tool calls are capped by the `vscodeAgentOrchestrator.toolRoundLimit` setting, which defaults to `16` rounds and can be raised up to `50` for MCP-heavy runs. If the same tool call fails twice with the same input and error, the orchestrator stops the run early to avoid retry loops. Usage-limit errors that say `try again in ...` are retried automatically one minute after the requested wait. The `vscodeAgentOrchestrator.blockedTools` setting controls the small default blocklist of known-problem native tools; set it to `[]` to expose all registered tools.
+When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session. Tool calls are capped by the node's optional **Tool round limit**, falling back to the `vscodeAgentOrchestrator.toolRoundLimit` setting, which defaults to `64` rounds and can be raised up to `200` for long implementation, PR, or MCP-heavy runs. If the same tool call fails twice with the same input and error, the orchestrator stops the run early to avoid retry loops. Usage-limit errors that say `try again in ...` are retried automatically one minute after the requested wait. The `vscodeAgentOrchestrator.blockedTools` setting controls the small default blocklist of known-problem native tools; set it to `[]` to expose all registered tools.
+
+When a node reaches the tool-round cap, the run is saved under `.agent-orchestrator/runtime/retries/` for manual resume. Use `@orchestrator /resume <node>` or `@orchestrator <node> resume` to restore the original run context and continue after the node inspects current external state.
 
 Each completed or errored node run writes a `usage.recorded` ledger entry. VS Code runs use the selected language model's `countTokens` API; headless and mock providers use a local estimate. The graph editor aggregates those entries into a workflow token total and a per-node usage panel.
+
+Runs that use tools also write `toolUsage.recorded` ledger entries with total calls, tool rounds, failures, the applied limit, whether the cap was reached, and a per-tool breakdown. The graph editor shows total tool calls in the toolbar, workflow-level tool totals, and per-node tool usage when a node is selected.
 
 ## Quick start
 
@@ -285,7 +293,7 @@ Hooks run from the workspace root. `beforeRun` failures fail the attempt; `after
 | `vscodeAgentOrchestrator.enabled` | `true` | Master kill switch — when false, no triggers fire |
 | `vscodeAgentOrchestrator.dryRun` | `false` | Log dispatch intents but don't open chats |
 | `vscodeAgentOrchestrator.ghPollSeconds` | `60` | GitHub PR polling interval (min 15) |
-| `vscodeAgentOrchestrator.toolRoundLimit` | `16` | Maximum model/tool-call rounds per node run (1-50) |
+| `vscodeAgentOrchestrator.toolRoundLimit` | `64` | Global maximum model/tool-call rounds per node run (1-200); nodes can override this in their Runtime settings |
 | `vscodeAgentOrchestrator.blockedTools` | Known-problem tools | Native tool names to hide from orchestrated node runs; set to `[]` to expose all tools |
 
 ## Why a graph editor and not just `chat.md` files?

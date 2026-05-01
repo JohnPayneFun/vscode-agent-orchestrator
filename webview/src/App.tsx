@@ -41,6 +41,20 @@ interface WorkflowTokenUsage {
   byNode: Record<string, TokenUsageSummary>;
 }
 
+interface ToolUsageSummary {
+  toolCalls: number;
+  toolRounds: number;
+  failedToolCalls: number;
+  runs: number;
+  limitHits: number;
+  byTool: Record<string, { calls: number; failures: number }>;
+}
+
+interface WorkflowToolUsage {
+  total: ToolUsageSummary;
+  byNode: Record<string, ToolUsageSummary>;
+}
+
 const EMPTY_WORKFLOW: Workflow = {
   $schema: "./runtime/workflow.schema.json",
   version: 1,
@@ -157,8 +171,10 @@ export function App(): JSX.Element {
   const activityByNode = useMemo(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
   const activityByEdge = useMemo(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
   const tokenUsage = useMemo(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
+  const toolUsage = useMemo(() => buildToolUsage(workflow, ledger), [workflow, ledger]);
   const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
   const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
+  const selectedToolUsage = selectedNode ? toolUsage.byNode[selectedNode.id] ?? emptyToolUsage() : null;
 
   const selectNode = (id: string | null): void => {
     setSelectedNodeId(id);
@@ -262,6 +278,9 @@ export function App(): JSX.Element {
         <span className="usage-chip" title="Total recorded token usage for loaded ledger entries">
           Tokens {formatTokenCount(tokenUsage.total.totalTokens)}
         </span>
+        <span className="usage-chip" title="Total recorded tool calls for loaded ledger entries">
+          Tools {formatTokenCount(toolUsage.total.toolCalls)}
+        </span>
         <div className="spacer" />
         <button className="secondary" onClick={() => setView(view === "graph" ? "json" : "graph")}>
           {view === "graph" ? "View as JSON" : "View as Graph"}
@@ -306,6 +325,7 @@ export function App(): JSX.Element {
             />
             <NodeActivityPanel activity={selectedActivity} />
             <NodeUsagePanel usage={selectedUsage ?? emptyUsage()} />
+            <NodeToolUsagePanel usage={selectedToolUsage ?? emptyToolUsage()} />
           </>
         ) : selectedEdge ? (
           <ConnectionPanel
@@ -356,12 +376,60 @@ export function App(): JSX.Element {
               Click a node to edit its fields. Drag from a node's right edge to another node to create an edge.
             </p>
             <WorkflowUsagePanel usage={tokenUsage.total} />
+            <WorkflowToolUsagePanel usage={toolUsage.total} />
           </div>
         )}
       </div>
 
       <LedgerPanel entries={ledger} />
     </div>
+  );
+}
+
+function NodeToolUsagePanel({ usage }: { usage: ToolUsageSummary }): JSX.Element {
+  return (
+    <div className="activity-panel">
+      <h3>Tool Usage</h3>
+      {usage.runs > 0 ? (
+        <>
+          <div className="usage-total">{formatTokenCount(usage.toolCalls)}</div>
+          <p className="field-note">Rounds: {formatTokenCount(usage.toolRounds)} · Failed: {formatTokenCount(usage.failedToolCalls)}</p>
+          <p className="field-note">Runs: {usage.runs}{usage.limitHits > 0 ? ` · limit hits: ${usage.limitHits}` : ""}</p>
+          <ToolBreakdown usage={usage} />
+        </>
+      ) : (
+        <p className="field-note">No tool usage recorded yet.</p>
+      )}
+    </div>
+  );
+}
+
+function WorkflowToolUsagePanel({ usage }: { usage: ToolUsageSummary }): JSX.Element {
+  return (
+    <div className="activity-panel">
+      <h3>Workflow Tools</h3>
+      <div className="usage-total">{formatTokenCount(usage.toolCalls)}</div>
+      <p className="field-note">Rounds: {formatTokenCount(usage.toolRounds)} · Failed: {formatTokenCount(usage.failedToolCalls)}</p>
+      <p className="field-note">Runs: {usage.runs}{usage.limitHits > 0 ? ` · limit hits: ${usage.limitHits}` : ""}</p>
+      <ToolBreakdown usage={usage} />
+    </div>
+  );
+}
+
+function ToolBreakdown({ usage }: { usage: ToolUsageSummary }): JSX.Element | null {
+  const tools = Object.entries(usage.byTool)
+    .sort((left, right) => right[1].calls - left[1].calls || left[0].localeCompare(right[0]))
+    .slice(0, 5);
+  if (tools.length === 0) return null;
+  return (
+    <ul className="tool-breakdown">
+      {tools.map(([name, tool]) => (
+        <li key={name}>
+          <span>{name}</span>
+          <span>{tool.calls}{tool.failures > 0 ? ` / ${tool.failures} failed` : ""}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -468,8 +536,31 @@ function buildTokenUsage(workflow: Workflow, entries: LedgerEntry[]): WorkflowTo
   return { total, byNode };
 }
 
+function buildToolUsage(workflow: Workflow, entries: LedgerEntry[]): WorkflowToolUsage {
+  const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+  const byNode: Record<string, ToolUsageSummary> = {};
+  const total = emptyToolUsage();
+  for (const entry of entries) {
+    if (entry.type !== "toolUsage.recorded") continue;
+    const node = typeof entry.node === "string" ? entry.node : undefined;
+    if (!node || !nodeIds.has(node)) continue;
+    const usage = byNode[node] ?? (byNode[node] = emptyToolUsage());
+    const toolCalls = numberField(entry.toolCalls);
+    const toolRounds = numberField(entry.toolRounds);
+    const failedToolCalls = numberField(entry.failedToolCalls);
+    const reachedLimit = entry.reachedLimit === true;
+    addToolUsage(usage, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
+    addToolUsage(total, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
+  }
+  return { total, byNode };
+}
+
 function emptyUsage(): TokenUsageSummary {
   return { inputTokens: 0, outputTokens: 0, totalTokens: 0, runs: 0, estimatedRuns: 0 };
+}
+
+function emptyToolUsage(): ToolUsageSummary {
+  return { toolCalls: 0, toolRounds: 0, failedToolCalls: 0, runs: 0, limitHits: 0, byTool: {} };
 }
 
 function addUsage(
@@ -484,6 +575,30 @@ function addUsage(
   usage.totalTokens += totalTokens;
   usage.runs += 1;
   if (estimated) usage.estimatedRuns += 1;
+}
+
+function addToolUsage(
+  usage: ToolUsageSummary,
+  toolCalls: number,
+  toolRounds: number,
+  failedToolCalls: number,
+  reachedLimit: boolean,
+  tools: unknown
+): void {
+  usage.toolCalls += toolCalls;
+  usage.toolRounds += toolRounds;
+  usage.failedToolCalls += failedToolCalls;
+  usage.runs += 1;
+  if (reachedLimit) usage.limitHits += 1;
+  if (!Array.isArray(tools)) return;
+  for (const tool of tools) {
+    if (!tool || typeof tool !== "object") continue;
+    const record = tool as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name : "unknown";
+    const current = usage.byTool[name] ?? (usage.byTool[name] = { calls: 0, failures: 0 });
+    current.calls += numberField(record.calls);
+    current.failures += numberField(record.failures);
+  }
 }
 
 function numberField(value: unknown): number {

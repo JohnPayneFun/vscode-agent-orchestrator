@@ -41748,6 +41748,20 @@
         }
       ),
       m ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "field-note", children: formatModelSelector(m) }) : null,
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h3", { style: { marginTop: 18 }, children: "Runtime (optional)" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { className: "field-note", children: "Leave blank to use the global tool-round limit." }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Tool round limit" }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+        "input",
+        {
+          type: "number",
+          min: 1,
+          max: 200,
+          value: node.toolRoundLimit ?? "",
+          placeholder: "Use global default",
+          onChange: (e) => set3("toolRoundLimit", parseOptionalLimit(e.target.value))
+        }
+      ),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 12 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
           "input",
@@ -41762,6 +41776,12 @@
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("button", { className: "danger", onClick: onDelete, children: "Delete node" }) })
     ] });
+  }
+  function parseOptionalLimit(value) {
+    if (!value.trim()) return null;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return null;
+    return Math.max(1, Math.min(200, Math.floor(parsed)));
   }
   function selectorFromModel(model) {
     return {
@@ -42314,8 +42334,10 @@
     const activityByNode = (0, import_react8.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
     const activityByEdge = (0, import_react8.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
     const tokenUsage = (0, import_react8.useMemo)(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
+    const toolUsage = (0, import_react8.useMemo)(() => buildToolUsage(workflow, ledger), [workflow, ledger]);
     const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
     const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
+    const selectedToolUsage = selectedNode ? toolUsage.byNode[selectedNode.id] ?? emptyToolUsage() : null;
     const selectNode = (id2) => {
       setSelectedNodeId(id2);
       setSelectedEdgeId(null);
@@ -42411,6 +42433,10 @@
           "Tokens ",
           formatTokenCount(tokenUsage.total.totalTokens)
         ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { className: "usage-chip", title: "Total recorded tool calls for loaded ledger entries", children: [
+          "Tools ",
+          formatTokenCount(toolUsage.total.toolCalls)
+        ] }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "spacer" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { className: "secondary", onClick: () => setView(view === "graph" ? "json" : "graph"), children: view === "graph" ? "View as JSON" : "View as Graph" }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { onClick: addNode, children: "+ Node" }),
@@ -42448,7 +42474,8 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeToolUsagePanel, { usage: selectedToolUsage ?? emptyToolUsage() })
       ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
         ConnectionPanel,
         {
@@ -42504,10 +42531,60 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { style: { marginTop: 16, opacity: 0.7, fontSize: 11 }, children: "Click a node to edit its fields. Drag from a node's right edge to another node to create an edge." }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WorkflowUsagePanel, { usage: tokenUsage.total })
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WorkflowUsagePanel, { usage: tokenUsage.total }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WorkflowToolUsagePanel, { usage: toolUsage.total })
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
     ] });
+  }
+  function NodeToolUsagePanel({ usage }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Tool Usage" }),
+      usage.runs > 0 ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "usage-total", children: formatTokenCount(usage.toolCalls) }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Rounds: ",
+          formatTokenCount(usage.toolRounds),
+          " \xB7 Failed: ",
+          formatTokenCount(usage.failedToolCalls)
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Runs: ",
+          usage.runs,
+          usage.limitHits > 0 ? ` \xB7 limit hits: ${usage.limitHits}` : ""
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(ToolBreakdown, { usage })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "field-note", children: "No tool usage recorded yet." })
+    ] });
+  }
+  function WorkflowToolUsagePanel({ usage }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Workflow Tools" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("div", { className: "usage-total", children: formatTokenCount(usage.toolCalls) }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+        "Rounds: ",
+        formatTokenCount(usage.toolRounds),
+        " \xB7 Failed: ",
+        formatTokenCount(usage.failedToolCalls)
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+        "Runs: ",
+        usage.runs,
+        usage.limitHits > 0 ? ` \xB7 limit hits: ${usage.limitHits}` : ""
+      ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(ToolBreakdown, { usage })
+    ] });
+  }
+  function ToolBreakdown({ usage }) {
+    const tools = Object.entries(usage.byTool).sort((left, right) => right[1].calls - left[1].calls || left[0].localeCompare(right[0])).slice(0, 5);
+    if (tools.length === 0) return null;
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("ul", { className: "tool-breakdown", children: tools.map(([name, tool]) => /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("li", { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { children: name }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("span", { children: [
+        tool.calls,
+        tool.failures > 0 ? ` / ${tool.failures} failed` : ""
+      ] })
+    ] }, name)) });
   }
   function NodeUsagePanel({ usage }) {
     return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel", children: [
@@ -42611,8 +42688,29 @@
     }
     return { total, byNode };
   }
+  function buildToolUsage(workflow, entries) {
+    const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+    const byNode = {};
+    const total = emptyToolUsage();
+    for (const entry of entries) {
+      if (entry.type !== "toolUsage.recorded") continue;
+      const node = typeof entry.node === "string" ? entry.node : void 0;
+      if (!node || !nodeIds.has(node)) continue;
+      const usage = byNode[node] ?? (byNode[node] = emptyToolUsage());
+      const toolCalls = numberField(entry.toolCalls);
+      const toolRounds = numberField(entry.toolRounds);
+      const failedToolCalls = numberField(entry.failedToolCalls);
+      const reachedLimit = entry.reachedLimit === true;
+      addToolUsage(usage, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
+      addToolUsage(total, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
+    }
+    return { total, byNode };
+  }
   function emptyUsage() {
     return { inputTokens: 0, outputTokens: 0, totalTokens: 0, runs: 0, estimatedRuns: 0 };
+  }
+  function emptyToolUsage() {
+    return { toolCalls: 0, toolRounds: 0, failedToolCalls: 0, runs: 0, limitHits: 0, byTool: {} };
   }
   function addUsage(usage, inputTokens, outputTokens, totalTokens, estimated) {
     usage.inputTokens += inputTokens;
@@ -42620,6 +42718,22 @@
     usage.totalTokens += totalTokens;
     usage.runs += 1;
     if (estimated) usage.estimatedRuns += 1;
+  }
+  function addToolUsage(usage, toolCalls, toolRounds, failedToolCalls, reachedLimit, tools) {
+    usage.toolCalls += toolCalls;
+    usage.toolRounds += toolRounds;
+    usage.failedToolCalls += failedToolCalls;
+    usage.runs += 1;
+    if (reachedLimit) usage.limitHits += 1;
+    if (!Array.isArray(tools)) return;
+    for (const tool of tools) {
+      if (!tool || typeof tool !== "object") continue;
+      const record = tool;
+      const name = typeof record.name === "string" ? record.name : "unknown";
+      const current = usage.byTool[name] ?? (usage.byTool[name] = { calls: 0, failures: 0 });
+      current.calls += numberField(record.calls);
+      current.failures += numberField(record.failures);
+    }
   }
   function numberField(value) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;

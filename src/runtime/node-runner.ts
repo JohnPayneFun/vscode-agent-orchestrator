@@ -15,11 +15,26 @@ export interface RuntimeChatMessage {
   content: string;
 }
 
+export interface RuntimeToolCallStat {
+  calls: number;
+  failures: number;
+}
+
+export interface RuntimeToolCallStats {
+  rounds: number;
+  calls: number;
+  failures: number;
+  limit: number;
+  reachedLimit?: boolean;
+  tools: Record<string, RuntimeToolCallStat>;
+}
+
 export interface RuntimeLanguageModel {
   id: string;
   name: string;
   vendor?: string;
   family?: string;
+  toolCallStats?: RuntimeToolCallStats;
   countTokens?(input: RuntimeChatMessage[] | string): Promise<number>;
   sendRequest(messages: RuntimeChatMessage[]): AsyncIterable<string>;
 }
@@ -190,6 +205,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
         outputTokenCount: await countTextTokens(model, assistantText),
         status: "errored"
       });
+      await recordToolUsage({ deps, node, eventId, model, status: "errored" });
     }
     await deps.ledger.append({
       type: "session.errored",
@@ -223,6 +239,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
     outputTokenCount: await countTextTokens(model, assistantText),
     status: "completed"
   });
+  await recordToolUsage({ deps, node, eventId, model, status: "completed" });
 
   const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
   const explicitHandoffs = parseHandoffs(assistantText);
@@ -302,6 +319,32 @@ async function recordUsage(args: {
       inputEstimated: args.inputTokenCount.estimated,
       outputEstimated: args.outputTokenCount.estimated
     }
+  });
+}
+
+async function recordToolUsage(args: {
+  deps: NodeRunnerDeps;
+  node: WorkflowNode;
+  eventId: string;
+  model: RuntimeLanguageModel;
+  status: "completed" | "errored";
+}): Promise<void> {
+  const stats = args.model.toolCallStats;
+  if (!stats || (stats.calls === 0 && !stats.reachedLimit)) return;
+  await args.deps.ledger.append({
+    type: "toolUsage.recorded",
+    node: args.node.id,
+    eventId: args.eventId,
+    model: args.model.id,
+    modelVendor: args.model.vendor,
+    modelFamily: args.model.family,
+    toolCalls: stats.calls,
+    toolRounds: stats.rounds,
+    failedToolCalls: stats.failures,
+    toolRoundLimit: stats.limit,
+    reachedLimit: stats.reachedLimit === true,
+    tools: Object.entries(stats.tools).map(([name, tool]) => ({ name, calls: tool.calls, failures: tool.failures })),
+    detail: { status: args.status }
   });
 }
 

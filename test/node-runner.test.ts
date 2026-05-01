@@ -6,7 +6,7 @@ import * as path from "node:path";
 import { MessageBus } from "../src/orchestration/message-bus.js";
 import { Ledger } from "../src/orchestration/ledger.js";
 import { ensureDirs, paths, type OrchestrationPaths } from "../src/orchestration/paths.js";
-import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } from "../src/runtime/node-runner.js";
+import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider, type RuntimeToolCallStats } from "../src/runtime/node-runner.js";
 import type { ModelSelector, Workflow } from "../shared/types.js";
 
 test("node runner executes without VS Code and routes graph-edge handoffs", async () => {
@@ -113,6 +113,36 @@ test("node runner drains handoffs and writes file artifacts headlessly", async (
   });
 });
 
+test("node runner records tool usage when a model reports tool stats", async () => {
+  await withRuntime(async ({ bus, ledger, p, workflow }) => {
+    const fake = fakeModelProvider(["Done."], {
+      rounds: 2,
+      calls: 3,
+      failures: 1,
+      limit: 64,
+      tools: {
+        run_in_terminal: { calls: 2, failures: 0 },
+        get_terminal_output: { calls: 1, failures: 1 }
+      }
+    });
+
+    await runWorkflowNode({
+      deps: deps({ bus, ledger, p, workflow, modelProvider: fake.provider }),
+      node: workflow.nodes[1],
+      source: "headless-test",
+      spawner: "headless-test"
+    });
+
+    const entry = (await ledger.tail()).find((candidate) => candidate.type === "toolUsage.recorded");
+    assert.ok(entry);
+    assert.equal(entry.node, "node_2");
+    assert.equal(entry.toolCalls, 3);
+    assert.equal(entry.toolRounds, 2);
+    assert.equal(entry.failedToolCalls, 1);
+    assert.equal(entry.toolRoundLimit, 64);
+  });
+});
+
 function deps(args: {
   bus: MessageBus;
   ledger: Ledger;
@@ -130,7 +160,7 @@ function deps(args: {
   };
 }
 
-function fakeModelProvider(fragments: string[]): {
+function fakeModelProvider(fragments: string[], toolCallStats?: RuntimeToolCallStats): {
   provider: RuntimeModelProvider;
   calls: RuntimeChatMessage[][];
   selectors: Array<ModelSelector | undefined>;
@@ -148,6 +178,7 @@ function fakeModelProvider(fragments: string[]): {
           name: "Fake Model",
           vendor: "test",
           family: "fake",
+          toolCallStats,
           async *sendRequest(messages: RuntimeChatMessage[]) {
             calls.push(messages);
             for (const fragment of fragments) {

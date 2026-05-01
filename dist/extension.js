@@ -16261,6 +16261,7 @@ var WORKFLOW_SCHEMA = {
               }
             ]
           },
+          toolRoundLimit: { type: ["integer", "null"], minimum: 1, maximum: 200 },
           display: {
             type: "object",
             additionalProperties: false,
@@ -17676,6 +17677,14 @@ async function takeRetryState(p, id) {
     return null;
   }
 }
+async function takeLatestRetryStateForNode(p, nodeId, retryKind) {
+  const states = await listRetryStates(p);
+  const match = states.filter((state) => state.nodeId === nodeId && (!retryKind || state.retryKind === retryKind)).sort((left, right) => {
+    const createdDelta = Date.parse(right.createdAt) - Date.parse(left.createdAt);
+    return createdDelta !== 0 ? createdDelta : right.id.localeCompare(left.id);
+  })[0];
+  return match ? takeRetryState(p, match.id) : null;
+}
 async function listRetryStates(p) {
   try {
     const files = (await fs9.promises.readdir(p.retriesRoot)).filter((file) => file.endsWith(".json")).sort();
@@ -17840,6 +17849,7 @@ async function runWorkflowNode(args) {
         outputTokenCount: await countTextTokens(model, assistantText),
         status: "errored"
       });
+      await recordToolUsage({ deps, node, eventId, model, status: "errored" });
     }
     await deps.ledger.append({
       type: "session.errored",
@@ -17871,6 +17881,7 @@ async function runWorkflowNode(args) {
     outputTokenCount: await countTextTokens(model, assistantText),
     status: "completed"
   });
+  await recordToolUsage({ deps, node, eventId, model, status: "completed" });
   const fileArtifacts = await writeArtifacts({ deps, node, eventId, assistantText, drained, emit });
   const explicitHandoffs = parseHandoffs(assistantText);
   const graphHandoffs = explicitHandoffs.length > 0 ? [] : buildGraphHandoffs(deps.getWorkflow(), node, assistantText);
@@ -17943,6 +17954,25 @@ async function recordUsage(args) {
       inputEstimated: args.inputTokenCount.estimated,
       outputEstimated: args.outputTokenCount.estimated
     }
+  });
+}
+async function recordToolUsage(args) {
+  const stats = args.model.toolCallStats;
+  if (!stats || stats.calls === 0 && !stats.reachedLimit) return;
+  await args.deps.ledger.append({
+    type: "toolUsage.recorded",
+    node: args.node.id,
+    eventId: args.eventId,
+    model: args.model.id,
+    modelVendor: args.model.vendor,
+    modelFamily: args.model.family,
+    toolCalls: stats.calls,
+    toolRounds: stats.rounds,
+    failedToolCalls: stats.failures,
+    toolRoundLimit: stats.limit,
+    reachedLimit: stats.reachedLimit === true,
+    tools: Object.entries(stats.tools).map(([name, tool]) => ({ name, calls: tool.calls, failures: tool.failures })),
+    detail: { status: args.status }
   });
 }
 async function writeArtifacts(args) {
@@ -18217,10 +18247,11 @@ function unitToMs(unit) {
 }
 
 // src/runtime/chat-participant.ts
-var DEFAULT_TOOL_ROUND_LIMIT = 16;
+var DEFAULT_TOOL_ROUND_LIMIT = 64;
 var MIN_TOOL_ROUND_LIMIT = 1;
-var MAX_TOOL_ROUND_LIMIT = 50;
+var MAX_TOOL_ROUND_LIMIT = 200;
 var REPEATED_TOOL_FAILURE_LIMIT = 2;
+var TOOL_ROUND_LIMIT_RE = /tool round limit|Stopped after \d+ tool round/i;
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18231,7 +18262,8 @@ function registerChatParticipant(context, deps) {
       }
       let rawNodeReference;
       let userText;
-      if (command === "run" || !command) {
+      let resumeRequested = command === "resume";
+      if (command === "run" || command === "resume" || !command) {
         const split = prompt.split(/\s+/);
         rawNodeReference = split[0] ?? "";
         userText = split.slice(1).join(" ").trim();
@@ -18246,9 +18278,14 @@ function registerChatParticipant(context, deps) {
         );
         return {};
       }
-      const parsedRun = command === "run" || !command ? parseRunPrompt(workflow, prompt) : null;
+      const parsedRun = command === "run" || command === "resume" || !command ? parseRunPrompt(workflow, prompt) : null;
       const nodeReference = parsedRun?.nodeReference ?? rawNodeReference;
       userText = parsedRun?.userText ?? userText;
+      const resumeText = parseResumeText(userText);
+      if (resumeText !== null) {
+        resumeRequested = true;
+        userText = resumeText;
+      }
       const resolution = resolveWorkflowNode(workflow, nodeReference);
       if (resolution.reason === "ambiguous") {
         stream.markdown(
@@ -18267,6 +18304,9 @@ function registerChatParticipant(context, deps) {
       if (!node.enabled) {
         stream.markdown(`Node \`${formatNodeReference(node)}\` is disabled. Enable it in the graph editor first.`);
         return {};
+      }
+      if (resumeRequested) {
+        return await resumeNode({ context, deps, node, request, ctx, stream, token, userText });
       }
       return await runNode({ context, deps, node, request, ctx, stream, token, userText });
     } catch (err) {
@@ -18305,6 +18345,13 @@ function listNodes(deps, stream) {
 Run a node with \`@orchestrator /run <label>\`. Node ids still work too.`);
   return {};
 }
+function parseResumeText(userText) {
+  const trimmed = userText.trim();
+  if (!trimmed) return null;
+  if (/^resume$/i.test(trimmed)) return "";
+  const match = trimmed.match(/^resume\s+(.+)$/i);
+  return match ? match[1]?.trim() ?? "" : null;
+}
 function parseRunPrompt(workflow, prompt) {
   const words = prompt.trim().split(/\s+/).filter(Boolean);
   for (let count = words.length; count > 0; count--) {
@@ -18326,7 +18373,7 @@ function promptEquals(left, right) {
 async function runNode(args) {
   const { context, deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode7.workspace.getConfiguration("vscodeAgentOrchestrator");
-  const toolRoundLimit = clampToolRoundLimit(config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
+  const toolRoundLimit = resolveToolRoundLimit(node.toolRoundLimit, config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
@@ -18343,6 +18390,8 @@ async function runNode(args) {
   } catch (err) {
     const scheduledRetry = await scheduleUsageLimitRetry({ context, deps, node, err, stream });
     if (scheduledRetry) return { metadata: { nodeId: node.id, retryId: scheduledRetry.retryId, retryAt: scheduledRetry.retryAt } };
+    const resumableRun = await saveToolRoundLimitResume({ deps, node, err, stream });
+    if (resumableRun) return { metadata: { nodeId: node.id, retryId: resumableRun.retryId, retryAt: resumableRun.retryAt } };
     if (err instanceof vscode7.LanguageModelError) {
       stream.markdown(
         `
@@ -18357,12 +18406,67 @@ Check that you've selected a model in the chat picker and that you have access (
     }
   }
 }
+async function resumeNode(args) {
+  const retryState = await takeLatestRetryStateForNode(args.deps.paths, args.node.id, "toolRoundLimit");
+  if (!retryState) {
+    args.stream.markdown(
+      `No saved resumable run found for \`${formatNodeReference(args.node)}\`. A run becomes resumable when it reaches \`vscodeAgentOrchestrator.toolRoundLimit\`.`
+    );
+    return {};
+  }
+  const extra = args.userText.trim();
+  const resumeInstruction = [
+    `[triggered:manual:retryId=${retryState.id},resume=1]`,
+    "Resume the saved run from the last completed external state. First inspect current Git, PR, filesystem, and MCP state; then continue only the remaining work. Do not repeat completed work unless verification shows it is missing.",
+    extra ? `Additional resume instruction: ${extra}` : ""
+  ].filter(Boolean).join("\n\n");
+  args.stream.markdown(`Resuming saved run \`${retryState.id}\` for \`${formatNodeReference(args.node)}\`.
+
+`);
+  return runNode({ ...args, userText: resumeInstruction });
+}
+async function saveToolRoundLimitResume(args) {
+  const message = errorMessage(args.err);
+  if (!TOOL_ROUND_LIMIT_RE.test(message)) return null;
+  const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
+  const retryAt = (/* @__PURE__ */ new Date()).toISOString();
+  const retryState = await saveRetryState(args.deps.paths, {
+    retryKind: "toolRoundLimit",
+    retryAt,
+    nodeId: args.node.id,
+    triggerType: runError?.triggerType ?? "manual",
+    userText: runError?.cleanedUserText ?? "",
+    drainedHandoffs: runError?.drainedHandoffs ?? [],
+    reason: message
+  });
+  await args.deps.ledger.append({
+    type: "retry.scheduled",
+    node: args.node.id,
+    eventId: runError?.eventId,
+    detail: {
+      retryId: retryState.id,
+      retryAt,
+      retryKind: retryState.retryKind,
+      manualResume: true,
+      drainedHandoffs: retryState.drainedHandoffs.length,
+      reason: message
+    }
+  });
+  args.stream.markdown(
+    `
+
+**Tool round limit reached.** Saved this run for manual resume. Continue it with \`@orchestrator /resume ${formatNodeReference(args.node)}\`, or raise this node's **Tool round limit** for longer runs.
+`
+  );
+  return { retryId: retryState.id, retryAt };
+}
 async function scheduleUsageLimitRetry(args) {
   const message = errorMessage(args.err);
   const retry = parseUsageLimitRetry(message);
   if (!retry) return null;
   const runError = args.err instanceof WorkflowNodeRunError ? args.err : null;
   const retryState = await saveRetryState(args.deps.paths, {
+    retryKind: "usageLimit",
     retryAt: retry.retryAt,
     nodeId: args.node.id,
     triggerType: runError?.triggerType ?? "manual",
@@ -18418,11 +18522,19 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
   return {
     async selectModel(selector) {
       const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      const toolCallStats = {
+        rounds: 0,
+        calls: 0,
+        failures: 0,
+        limit: toolRoundLimit,
+        tools: {}
+      };
       return {
         id: model.id,
         name: model.name,
         vendor: model.vendor,
         family: model.family,
+        toolCallStats,
         async countTokens(input) {
           if (typeof input === "string") return model.countTokens(input, token);
           const counts = await Promise.all(input.map((message) => model.countTokens(toVsCodeMessage(message), token)));
@@ -18450,12 +18562,20 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
               }
             }
             if (toolCalls.length === 0) return;
+            toolCallStats.rounds += 1;
+            toolCallStats.calls += toolCalls.length;
+            for (const toolCall of toolCalls) {
+              const toolStats = toolCallStats.tools[toolCall.name] ?? (toolCallStats.tools[toolCall.name] = { calls: 0, failures: 0 });
+              toolStats.calls += 1;
+            }
             requestMessages.push(vscode7.LanguageModelChatMessage.Assistant(assistantParts));
             const toolResults = [];
             for (const toolCall of toolCalls) {
               stream.progress(`Running tool ${toolCall.name}...`);
               const outcome = await invokeToolResultPart(toolCall, request, token, stream);
               if (outcome.failureSignature) {
+                toolCallStats.failures += 1;
+                toolCallStats.tools[toolCall.name].failures += 1;
                 const failureCount = (failedToolCalls.get(outcome.failureSignature) ?? 0) + 1;
                 failedToolCalls.set(outcome.failureSignature, failureCount);
                 if (failureCount >= REPEATED_TOOL_FAILURE_LIMIT) {
@@ -18468,8 +18588,9 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
             }
             requestMessages.push(vscode7.LanguageModelChatMessage.User(toolResults));
           }
+          toolCallStats.reachedLimit = true;
           throw new Error(
-            `Stopped after ${toolRoundLimit} tool round(s). The model kept requesting tools, so the run did not complete.`
+            `Reached the configured tool round limit of ${toolRoundLimit}. The node may still be making progress; raise this node's Tool round limit or vscodeAgentOrchestrator.toolRoundLimit for longer implementation, PR, or MCP workflows.`
           );
         }
       };
@@ -18479,6 +18600,9 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
 function clampToolRoundLimit(value) {
   if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
   return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
+}
+function resolveToolRoundLimit(nodeLimit, configuredLimit) {
+  return clampToolRoundLimit(nodeLimit ?? configuredLimit);
 }
 async function invokeToolResultPart(toolCall, request, token, stream) {
   try {
@@ -18937,6 +19061,7 @@ function deactivate() {
 async function resumePendingRetries(context, p, ledger) {
   const retryStates = await listRetryStates(p);
   for (const state of retryStates) {
+    if (state.retryKind && state.retryKind !== "usageLimit") continue;
     const retryAtMs = Date.parse(state.retryAt);
     const delayMs = Number.isNaN(retryAtMs) ? 0 : retryAtMs - Date.now();
     scheduleRetryChat(context, retryQuery(state.nodeId, state.id), Math.max(0, delayMs));
