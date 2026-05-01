@@ -5,6 +5,7 @@ import {
   formatInterval,
   intervalToMs,
   nextCronDate,
+  nextTriggerAt,
   nextIntervalDelayMs
 } from "../shared/schedule.js";
 
@@ -28,6 +29,23 @@ test("schedule helpers calculate next interval boundary", () => {
 
 test("schedule helpers calculate next cron date", () => {
   const next = nextCronDate({ type: "timer", cron: "*/30 * * * *", tz: "utc" }, Date.UTC(2026, 4, 1, 10, 1, 0));
+
+  assert.equal(next?.toISOString(), "2026-05-01T10:30:00.000Z");
+});
+
+test("schedule helpers use the next scheduled child for any triggers", () => {
+  const nowMs = Date.UTC(2026, 4, 1, 10, 1, 0);
+  const next = nextTriggerAt(
+    {
+      type: "any",
+      triggers: [
+        { type: "handoff" },
+        { type: "timer", cron: "*/30 * * * *", tz: "utc" },
+        { type: "interval", every: 2, unit: "hours" }
+      ]
+    },
+    nowMs
+  );
 
   assert.equal(next?.toISOString(), "2026-05-01T10:30:00.000Z");
 });

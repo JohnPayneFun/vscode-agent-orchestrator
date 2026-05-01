@@ -16117,6 +16117,92 @@ var path3 = __toESM(require("path"));
 var import_ajv = __toESM(require_ajv());
 
 // shared/schema.ts
+var TRIGGER_LEAF_SCHEMAS = [
+  {
+    type: "object",
+    required: ["type", "repo", "events"],
+    properties: {
+      type: { const: "ghPr" },
+      repo: { type: "string", pattern: "^[^/]+/[^/]+$" },
+      events: {
+        type: "array",
+        items: { enum: ["opened", "synchronize", "reopened", "closed"] }
+      },
+      branchFilter: { type: ["string", "null"] }
+    }
+  },
+  {
+    type: "object",
+    required: ["type", "cron"],
+    properties: {
+      type: { const: "timer" },
+      cron: { type: "string", minLength: 9 },
+      tz: { enum: ["local", "utc"] }
+    }
+  },
+  {
+    type: "object",
+    required: ["type", "every", "unit"],
+    properties: {
+      type: { const: "interval" },
+      every: { type: "integer", minimum: 1, maximum: 1e5 },
+      unit: { enum: ["seconds", "minutes", "hours", "days"] },
+      runOnStart: { type: "boolean" }
+    }
+  },
+  { type: "object", required: ["type"], properties: { type: { const: "handoff" } } },
+  { type: "object", required: ["type"], properties: { type: { const: "manual" } } },
+  {
+    type: "object",
+    required: ["type", "glob"],
+    properties: { type: { const: "fileChange" }, glob: { type: "string" } }
+  },
+  {
+    type: "object",
+    required: ["type"],
+    properties: {
+      type: { const: "startup" },
+      delaySeconds: { type: "integer", minimum: 0, maximum: 3600 }
+    }
+  },
+  {
+    type: "object",
+    required: ["type", "glob", "severity"],
+    properties: {
+      type: { const: "diagnostics" },
+      glob: { type: "string", minLength: 1 },
+      severity: { enum: ["any", "error", "warning", "info", "hint"] },
+      debounceMs: { type: "integer", minimum: 100, maximum: 6e4 }
+    }
+  },
+  {
+    type: "object",
+    required: ["type", "path"],
+    properties: {
+      type: { const: "webhook" },
+      path: { type: "string", pattern: "^/[-a-zA-Z0-9_./]*$" },
+      port: { type: "integer", minimum: 1024, maximum: 65535 },
+      secretEnv: { type: ["string", "null"], minLength: 1 },
+      secretHeader: { type: "string", minLength: 1 }
+    }
+  }
+];
+var TRIGGER_SCHEMAS = [
+  ...TRIGGER_LEAF_SCHEMAS,
+  {
+    type: "object",
+    required: ["type", "triggers"],
+    properties: {
+      type: { const: "any" },
+      triggers: {
+        type: "array",
+        minItems: 1,
+        maxItems: 8,
+        items: { oneOf: TRIGGER_LEAF_SCHEMAS }
+      }
+    }
+  }
+];
 var WORKFLOW_SCHEMA = {
   $schema: "http://json-schema.org/draft-07/schema#",
   $id: "https://local/vscode-agent-orchestrator/workflow.schema.json",
@@ -16148,78 +16234,7 @@ var WORKFLOW_SCHEMA = {
           id: { type: "string", pattern: "^[a-zA-Z0-9_-]+$" },
           label: { type: "string", minLength: 1 },
           agent: { type: "string" },
-          trigger: {
-            oneOf: [
-              {
-                type: "object",
-                required: ["type", "repo", "events"],
-                properties: {
-                  type: { const: "ghPr" },
-                  repo: { type: "string", pattern: "^[^/]+/[^/]+$" },
-                  events: {
-                    type: "array",
-                    items: { enum: ["opened", "synchronize", "reopened", "closed"] }
-                  },
-                  branchFilter: { type: ["string", "null"] }
-                }
-              },
-              {
-                type: "object",
-                required: ["type", "cron"],
-                properties: {
-                  type: { const: "timer" },
-                  cron: { type: "string", minLength: 9 },
-                  tz: { enum: ["local", "utc"] }
-                }
-              },
-              {
-                type: "object",
-                required: ["type", "every", "unit"],
-                properties: {
-                  type: { const: "interval" },
-                  every: { type: "integer", minimum: 1, maximum: 1e5 },
-                  unit: { enum: ["seconds", "minutes", "hours", "days"] },
-                  runOnStart: { type: "boolean" }
-                }
-              },
-              { type: "object", required: ["type"], properties: { type: { const: "handoff" } } },
-              { type: "object", required: ["type"], properties: { type: { const: "manual" } } },
-              {
-                type: "object",
-                required: ["type", "glob"],
-                properties: { type: { const: "fileChange" }, glob: { type: "string" } }
-              },
-              {
-                type: "object",
-                required: ["type"],
-                properties: {
-                  type: { const: "startup" },
-                  delaySeconds: { type: "integer", minimum: 0, maximum: 3600 }
-                }
-              },
-              {
-                type: "object",
-                required: ["type", "glob", "severity"],
-                properties: {
-                  type: { const: "diagnostics" },
-                  glob: { type: "string", minLength: 1 },
-                  severity: { enum: ["any", "error", "warning", "info", "hint"] },
-                  debounceMs: { type: "integer", minimum: 100, maximum: 6e4 }
-                }
-              },
-              {
-                type: "object",
-                required: ["type", "path"],
-                properties: {
-                  type: { const: "webhook" },
-                  path: { type: "string", pattern: "^/[-a-zA-Z0-9_./]*$" },
-                  port: { type: "integer", minimum: 1024, maximum: 65535 },
-                  secretEnv: { type: ["string", "null"], minLength: 1 },
-                  secretHeader: { type: "string", minLength: 1 }
-                }
-              }
-            ]
-          },
+          trigger: { oneOf: TRIGGER_SCHEMAS },
           context: { type: "string" },
           model: {
             oneOf: [
@@ -17399,15 +17414,16 @@ var TriggerRegistry = class {
     if (workflow) {
       for (const node of workflow.nodes) {
         if (!node.enabled) continue;
-        if (node.trigger.type === "manual") continue;
-        const key = this.keyFor(node);
-        desired.add(key);
-        if (this.active.has(key)) continue;
-        const trigger = this.create(node);
-        if (trigger) {
-          trigger.start();
-          this.active.set(key, trigger);
-          this.output.appendLine(`[trigger] started ${node.trigger.type} for ${node.id}`);
+        for (const spec of this.triggerSpecs(node)) {
+          if (spec.trigger.type === "manual") continue;
+          desired.add(spec.key);
+          if (this.active.has(spec.key)) continue;
+          const trigger = this.create(node, spec.trigger);
+          if (trigger) {
+            trigger.start();
+            this.active.set(spec.key, trigger);
+            this.output.appendLine(`[trigger] started ${spec.trigger.type} for ${node.id}`);
+          }
         }
       }
     }
@@ -17423,36 +17439,42 @@ var TriggerRegistry = class {
     for (const t of this.active.values()) t.dispose();
     this.active.clear();
   }
-  keyFor(node) {
-    return `${node.id}:${node.trigger.type}:${JSON.stringify(node.trigger)}`;
+  triggerSpecs(node) {
+    if (node.trigger.type !== "any") {
+      return [{ key: `${node.id}:${node.trigger.type}:${JSON.stringify(node.trigger)}`, trigger: node.trigger }];
+    }
+    return node.trigger.triggers.map((trigger, index) => ({
+      key: `${node.id}:any:${index}:${trigger.type}:${JSON.stringify(trigger)}`,
+      trigger
+    }));
   }
-  create(node) {
+  create(node, triggerConfig) {
     const deps = {
       fire: async (n, detail) => {
-        const ctx = { reason: n.trigger.type, triggerDetail: detail };
+        const ctx = { reason: triggerConfig.type, triggerDetail: detail };
         await this.dispatcher.fireNode(n, ctx);
       },
       log: (msg, level = "info") => {
         this.output.appendLine(`[${level}] ${msg}`);
       }
     };
-    switch (node.trigger.type) {
+    switch (triggerConfig.type) {
       case "timer":
-        return new TimerTrigger(node, node.trigger, deps);
+        return new TimerTrigger(node, triggerConfig, deps);
       case "interval":
-        return new IntervalTrigger(node, node.trigger, deps);
+        return new IntervalTrigger(node, triggerConfig, deps);
       case "handoff":
         return new HandoffTrigger(node, this.p, deps);
       case "ghPr":
-        return new GhPrTrigger(node, node.trigger, this.p, this.bus, deps);
+        return new GhPrTrigger(node, triggerConfig, this.p, this.bus, deps);
       case "fileChange":
-        return new FileChangeTrigger(node, node.trigger, this.p, this.bus, deps);
+        return new FileChangeTrigger(node, triggerConfig, this.p, this.bus, deps);
       case "startup":
-        return new StartupTrigger(node, node.trigger, deps);
+        return new StartupTrigger(node, triggerConfig, deps);
       case "diagnostics":
-        return new DiagnosticsTrigger(node, node.trigger, this.p, this.bus, deps);
+        return new DiagnosticsTrigger(node, triggerConfig, this.p, this.bus, deps);
       case "webhook":
-        return new WebhookTrigger(node, node.trigger, this.p, this.bus, deps);
+        return new WebhookTrigger(node, triggerConfig, this.p, this.bus, deps);
       case "manual":
       default:
         return null;
@@ -17882,6 +17904,7 @@ function findEdgeId(workflow, from, to) {
 }
 
 // src/runtime/chat-participant.ts
+var MAX_TOOL_ROUNDS = 6;
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18036,13 +18059,50 @@ function createVsCodeModelProvider(request, stream, token) {
         vendor: model.vendor,
         family: model.family,
         async *sendRequest(messages) {
-          const response = await model.sendRequest(messages.map(toVsCodeMessage), toLanguageModelRequestOptions(selector), token);
-          for await (const fragment of response.text) {
-            yield fragment;
+          const requestMessages = messages.map(toVsCodeMessage);
+          const tools = vscode6.lm.tools.map(toLanguageModelChatTool);
+          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            const response = await model.sendRequest(
+              requestMessages,
+              toLanguageModelRequestOptions(selector, tools),
+              token
+            );
+            const assistantParts = [];
+            const toolCalls = [];
+            for await (const part of response.stream) {
+              if (part instanceof vscode6.LanguageModelTextPart) {
+                assistantParts.push(part);
+                yield part.value;
+              } else if (part instanceof vscode6.LanguageModelToolCallPart) {
+                assistantParts.push(part);
+                toolCalls.push(part);
+              }
+            }
+            if (toolCalls.length === 0) return;
+            requestMessages.push(vscode6.LanguageModelChatMessage.Assistant(assistantParts));
+            const toolResults = [];
+            for (const toolCall of toolCalls) {
+              stream.progress(`Running tool ${toolCall.name}...`);
+              const result = await vscode6.lm.invokeTool(
+                toolCall.name,
+                { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+                token
+              );
+              toolResults.push(new vscode6.LanguageModelToolResultPart(toolCall.callId, result.content));
+            }
+            requestMessages.push(vscode6.LanguageModelChatMessage.User(toolResults));
           }
+          yield "\n\n*Stopped after the maximum number of tool rounds.*";
         }
       };
     }
+  };
+}
+function toLanguageModelChatTool(tool) {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema
   };
 }
 function toVsCodeMessage(message) {
@@ -18066,9 +18126,14 @@ function toLanguageModelSelector(model) {
   if (model.version?.trim()) selector.version = model.version.trim();
   return Object.keys(selector).length > 0 ? selector : void 0;
 }
-function toLanguageModelRequestOptions(model) {
-  if (!model?.reasoningEffort) return {};
-  return { modelOptions: { reasoningEffort: model.reasoningEffort } };
+function toLanguageModelRequestOptions(model, tools) {
+  const options = {};
+  if (model?.reasoningEffort) options.modelOptions = { reasoningEffort: model.reasoningEffort };
+  if (tools.length > 0) {
+    options.tools = tools;
+    options.toolMode = vscode6.LanguageModelChatToolMode.Auto;
+  }
+  return options;
 }
 async function selectModel(selector, fallback, stream) {
   if (!selector) return fallback;

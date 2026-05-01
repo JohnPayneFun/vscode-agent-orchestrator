@@ -41301,6 +41301,8 @@
   }
   function nextTriggerAt(trigger, nowMs = Date.now()) {
     switch (trigger.type) {
+      case "any":
+        return trigger.triggers.map((child) => nextTriggerAt(child, nowMs)).filter((date) => Boolean(date)).sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
       case "interval": {
         const delayMs = nextIntervalDelayMs(trigger, nowMs);
         return delayMs === null ? null : new Date(nowMs + delayMs);
@@ -41386,7 +41388,7 @@
     ] });
   }
   function describeCountdown(node, nowMs) {
-    if (!node.enabled || node.trigger.type !== "timer" && node.trigger.type !== "interval") return null;
+    if (!node.enabled || !hasScheduledTrigger(node.trigger)) return null;
     const next = nextTriggerAt(node.trigger, nowMs);
     if (!next) return { label: "Schedule invalid", title: "The timer schedule could not be parsed.", tone: "warning" };
     return {
@@ -41395,26 +41397,34 @@
     };
   }
   function describeTrigger(node) {
-    switch (node.trigger.type) {
+    return describeTriggerConfig(node.trigger);
+  }
+  function describeTriggerConfig(trigger) {
+    switch (trigger.type) {
       case "ghPr":
-        return `GH PR \xB7 ${node.trigger.repo}`;
+        return `GH PR \xB7 ${trigger.repo}`;
       case "timer":
-        return `Timer \xB7 ${node.trigger.cron}`;
+        return `Timer \xB7 ${trigger.cron}`;
       case "interval":
-        return formatInterval(node.trigger);
+        return formatInterval(trigger);
       case "handoff":
         return "New Message";
       case "manual":
         return "Manual";
       case "fileChange":
-        return `File \xB7 ${node.trigger.glob}`;
+        return `File \xB7 ${trigger.glob}`;
       case "startup":
         return "Workspace start";
       case "diagnostics":
-        return `Problems \xB7 ${node.trigger.severity}`;
+        return `Problems \xB7 ${trigger.severity}`;
       case "webhook":
-        return `Webhook \xB7 ${node.trigger.path}`;
+        return `Webhook \xB7 ${trigger.path}`;
+      case "any":
+        return `Any \xB7 ${trigger.triggers.map(describeTriggerConfig).join(" / ")}`;
     }
+  }
+  function hasScheduledTrigger(trigger) {
+    return trigger.type === "timer" || trigger.type === "interval" || trigger.type === "any" && trigger.triggers.some(hasScheduledTrigger);
   }
   var nodeTypes = { persona: PersonaNode };
   function GraphView2(props) {
@@ -41656,6 +41666,7 @@
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "On Trigger" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("select", { value: node.trigger.type, onChange: (e) => setTriggerType(e.target.value), children: [
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "manual", children: "Manual" }),
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "any", children: "Any of these inputs" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "handoff", children: "New Message (handoff received)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "interval", children: "Timer (simple interval)" }),
         /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "timer", children: "Timer (cron)" }),
@@ -41796,6 +41807,62 @@
     onChange
   }) {
     switch (trigger.type) {
+      case "any":
+        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "trigger-list", children: [
+          trigger.triggers.map((child, index2) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "trigger-group", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row trigger-group-header", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { children: [
+                  "Input ",
+                  index2 + 1
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                  "select",
+                  {
+                    value: child.type,
+                    onChange: (e) => {
+                      const nextChild = defaultTrigger(e.target.value);
+                      onChange({
+                        ...trigger,
+                        triggers: trigger.triggers.map((candidate, childIndex) => childIndex === index2 ? nextChild : candidate)
+                      });
+                    },
+                    children: leafTriggerOptions()
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "button",
+                {
+                  className: "secondary",
+                  disabled: trigger.triggers.length <= 1,
+                  onClick: () => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index2) }),
+                  children: "Remove"
+                }
+              )
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              TriggerFields,
+              {
+                trigger: child,
+                onChange: (nextChild) => onChange({
+                  ...trigger,
+                  triggers: trigger.triggers.map(
+                    (candidate, childIndex) => childIndex === index2 ? nextChild : candidate
+                  )
+                })
+              }
+            )
+          ] }, `${index2}:${child.type}`)),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "button",
+            {
+              className: "secondary",
+              onClick: () => onChange({ ...trigger, triggers: [...trigger.triggers, { type: "handoff" }] }),
+              children: "+ Add input"
+            }
+          )
+        ] });
       case "ghPr":
         return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Repo (owner/repo)" }),
@@ -42002,6 +42069,8 @@
   }
   function defaultTrigger(type) {
     switch (type) {
+      case "any":
+        return { type: "any", triggers: [{ type: "handoff" }, { type: "interval", every: 30, unit: "minutes" }] };
       case "ghPr":
         return { type: "ghPr", repo: "owner/repo", events: ["opened", "synchronize"], branchFilter: null };
       case "timer":
@@ -42021,6 +42090,19 @@
       case "webhook":
         return { type: "webhook", path: "/agent-orchestrator/webhook", port: 8787, secretEnv: null };
     }
+  }
+  function leafTriggerOptions() {
+    return [
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "manual", children: "Manual" }, "manual"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "handoff", children: "New Message (handoff received)" }, "handoff"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "interval", children: "Timer (simple interval)" }, "interval"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "timer", children: "Timer (cron)" }, "timer"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "ghPr", children: "GitHub PR" }, "ghPr"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "fileChange", children: "File change" }, "fileChange"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "startup", children: "Workspace start" }, "startup"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "diagnostics", children: "Problems / diagnostics" }, "diagnostics"),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "webhook", children: "Webhook" }, "webhook")
+    ];
   }
 
   // webview/src/LedgerPanel.tsx

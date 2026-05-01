@@ -17,7 +17,7 @@ import {
   type NodeChange,
   type EdgeChange
 } from "@xyflow/react";
-import type { Workflow, WorkflowNode } from "../../shared/types.js";
+import type { TriggerConfig, Workflow, WorkflowNode } from "../../shared/types.js";
 import { formatCountdown, formatInterval, nextTriggerAt } from "../../shared/schedule.js";
 import type { EdgeActivity, NodeActivity } from "./App.js";
 
@@ -82,7 +82,7 @@ interface CountdownDescription {
 }
 
 function describeCountdown(node: WorkflowNode, nowMs: number): CountdownDescription | null {
-  if (!node.enabled || (node.trigger.type !== "timer" && node.trigger.type !== "interval")) return null;
+  if (!node.enabled || !hasScheduledTrigger(node.trigger)) return null;
   const next = nextTriggerAt(node.trigger, nowMs);
   if (!next) return { label: "Schedule invalid", title: "The timer schedule could not be parsed.", tone: "warning" };
   return {
@@ -92,26 +92,36 @@ function describeCountdown(node: WorkflowNode, nowMs: number): CountdownDescript
 }
 
 function describeTrigger(node: WorkflowNode): string {
-  switch (node.trigger.type) {
+  return describeTriggerConfig(node.trigger);
+}
+
+function describeTriggerConfig(trigger: TriggerConfig): string {
+  switch (trigger.type) {
     case "ghPr":
-      return `GH PR · ${node.trigger.repo}`;
+      return `GH PR · ${trigger.repo}`;
     case "timer":
-      return `Timer · ${node.trigger.cron}`;
+      return `Timer · ${trigger.cron}`;
     case "interval":
-      return formatInterval(node.trigger);
+      return formatInterval(trigger);
     case "handoff":
       return "New Message";
     case "manual":
       return "Manual";
     case "fileChange":
-      return `File · ${node.trigger.glob}`;
+      return `File · ${trigger.glob}`;
     case "startup":
       return "Workspace start";
     case "diagnostics":
-      return `Problems · ${node.trigger.severity}`;
+      return `Problems · ${trigger.severity}`;
     case "webhook":
-      return `Webhook · ${node.trigger.path}`;
+      return `Webhook · ${trigger.path}`;
+    case "any":
+      return `Any · ${trigger.triggers.map(describeTriggerConfig).join(" / ")}`;
   }
+}
+
+function hasScheduledTrigger(trigger: TriggerConfig): boolean {
+  return trigger.type === "timer" || trigger.type === "interval" || (trigger.type === "any" && trigger.triggers.some(hasScheduledTrigger));
 }
 
 const nodeTypes = { persona: PersonaNode };

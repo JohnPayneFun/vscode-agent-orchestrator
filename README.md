@@ -40,6 +40,19 @@ State lives in `.agent-orchestrator/` at the workspace root:
 | `startup` | The workspace activates the extension, after an optional delay |
 | `diagnostics` | VS Code Problems/diagnostics change for matching files and severity |
 | `webhook` | A local HTTP `POST` request hits the node's configured path |
+| `any` | Any child trigger fires, e.g. handoff received or every 30 minutes |
+
+Use `any` when a node needs multiple inputs. For example, a PM node can run on both inbox handoffs and a recurring timer:
+
+```jsonc
+{
+    "type": "any",
+    "triggers": [
+        { "type": "handoff" },
+        { "type": "interval", "every": 30, "unit": "minutes" }
+    ]
+}
+```
 
 Webhook triggers listen on `127.0.0.1` and default to port `8787`. Add an optional `secretEnv` to require a shared secret header before the node fires:
 
@@ -68,6 +81,8 @@ Invoke-RestMethod -Method Post `
 Each node has an optional `model` selector (`vendor` / `family` / `id`) that maps to `vscode.lm.selectChatModels`. Leave it blank and the participant uses whatever the user has selected in the chat dropdown — the most natural workflow.
 
 Nodes can also set `model.reasoningEffort` to `none`, `low`, `medium`, `high`, or `xhigh`. In VS Code this is passed through as the Copilot-style `reasoningEffort` model option, matching the native Thinking Effort menu when the selected model supports it.
+
+When running inside VS Code, node model calls expose registered language-model tools through `vscode.lm.tools` and execute requested tool calls with `vscode.lm.invokeTool`. That is what allows a node to use MCP-backed tools such as Monday.com when those tools are available in the current VS Code session.
 
 ## Quick start
 

@@ -6,6 +6,8 @@ import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../orchestration/node-resolver.js";
 import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
 
+const MAX_TOOL_ROUNDS = 6;
+
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
   bus: MessageBus;
@@ -216,13 +218,51 @@ function createVsCodeModelProvider(
         vendor: model.vendor,
         family: model.family,
         async *sendRequest(messages: RuntimeChatMessage[]) {
-          const response = await model.sendRequest(messages.map(toVsCodeMessage), toLanguageModelRequestOptions(selector), token);
-          for await (const fragment of response.text) {
-            yield fragment;
+          const requestMessages = messages.map(toVsCodeMessage);
+          const tools = vscode.lm.tools.map(toLanguageModelChatTool);
+          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            const response = await model.sendRequest(
+              requestMessages,
+              toLanguageModelRequestOptions(selector, tools),
+              token
+            );
+            const assistantParts: Array<vscode.LanguageModelTextPart | vscode.LanguageModelToolCallPart> = [];
+            const toolCalls: vscode.LanguageModelToolCallPart[] = [];
+            for await (const part of response.stream) {
+              if (part instanceof vscode.LanguageModelTextPart) {
+                assistantParts.push(part);
+                yield part.value;
+              } else if (part instanceof vscode.LanguageModelToolCallPart) {
+                assistantParts.push(part);
+                toolCalls.push(part);
+              }
+            }
+            if (toolCalls.length === 0) return;
+            requestMessages.push(vscode.LanguageModelChatMessage.Assistant(assistantParts));
+            const toolResults: vscode.LanguageModelToolResultPart[] = [];
+            for (const toolCall of toolCalls) {
+              stream.progress(`Running tool ${toolCall.name}...`);
+              const result = await vscode.lm.invokeTool(
+                toolCall.name,
+                { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+                token
+              );
+              toolResults.push(new vscode.LanguageModelToolResultPart(toolCall.callId, result.content));
+            }
+            requestMessages.push(vscode.LanguageModelChatMessage.User(toolResults));
           }
+          yield "\n\n*Stopped after the maximum number of tool rounds.*";
         }
       };
     }
+  };
+}
+
+function toLanguageModelChatTool(tool: vscode.LanguageModelToolInformation): vscode.LanguageModelChatTool {
+  return {
+    name: tool.name,
+    description: tool.description,
+    inputSchema: tool.inputSchema
   };
 }
 
@@ -252,9 +292,17 @@ function toLanguageModelSelector(model: ModelSelector | null | undefined): vscod
   return Object.keys(selector).length > 0 ? selector : undefined;
 }
 
-function toLanguageModelRequestOptions(model: ModelSelector | null | undefined): vscode.LanguageModelChatRequestOptions {
-  if (!model?.reasoningEffort) return {};
-  return { modelOptions: { reasoningEffort: model.reasoningEffort } };
+function toLanguageModelRequestOptions(
+  model: ModelSelector | null | undefined,
+  tools: vscode.LanguageModelChatTool[]
+): vscode.LanguageModelChatRequestOptions {
+  const options: vscode.LanguageModelChatRequestOptions = {};
+  if (model?.reasoningEffort) options.modelOptions = { reasoningEffort: model.reasoningEffort };
+  if (tools.length > 0) {
+    options.tools = tools;
+    options.toolMode = vscode.LanguageModelChatToolMode.Auto;
+  }
+  return options;
 }
 
 async function selectModel(

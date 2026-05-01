@@ -20,6 +20,11 @@ export function formatInterval(cfg: TriggerInterval): string {
 
 export function nextTriggerAt(trigger: TriggerConfig, nowMs = Date.now()): Date | null {
   switch (trigger.type) {
+    case "any":
+      return trigger.triggers
+        .map((child) => nextTriggerAt(child, nowMs))
+        .filter((date): date is Date => Boolean(date))
+        .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
     case "interval": {
       const delayMs = nextIntervalDelayMs(trigger, nowMs);
       return delayMs === null ? null : new Date(nowMs + delayMs);

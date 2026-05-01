@@ -10,7 +10,8 @@ export type TriggerType =
   | "fileChange"
   | "startup"
   | "diagnostics"
-  | "webhook";
+  | "webhook"
+  | "any";
 
 export interface TriggerGhPr {
   type: "ghPr";
@@ -65,7 +66,7 @@ export interface TriggerWebhook {
   secretHeader?: string;
 }
 
-export type TriggerConfig =
+export type TriggerLeafConfig =
   | TriggerGhPr
   | TriggerTimer
   | TriggerInterval
@@ -75,6 +76,13 @@ export type TriggerConfig =
   | TriggerStartup
   | TriggerDiagnostics
   | TriggerWebhook;
+
+export interface TriggerAny {
+  type: "any";
+  triggers: TriggerLeafConfig[];
+}
+
+export type TriggerConfig = TriggerLeafConfig | TriggerAny;
 
 export interface NodePosition {
   x: number;

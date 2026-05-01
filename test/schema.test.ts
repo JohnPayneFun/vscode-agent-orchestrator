@@ -53,6 +53,20 @@ test("workflow schema accepts simple interval triggers", () => {
   assert.equal(validate(workflow), true, formatErrors());
 });
 
+test("workflow schema accepts any trigger operators", () => {
+  const workflow = createWorkflow({
+    trigger: {
+      type: "any",
+      triggers: [
+        { type: "handoff" },
+        { type: "interval", every: 30, unit: "minutes" }
+      ]
+    }
+  });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
 test("workflow schema accepts node display options", () => {
   const workflow = createWorkflow({ display: { showFullContext: true } });
 

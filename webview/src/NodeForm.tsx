@@ -2,6 +2,7 @@ import React from "react";
 import type {
   WorkflowNode,
   TriggerConfig,
+  TriggerLeafConfig,
   TriggerType,
   ModelReasoningEffort,
   ModelSelector,
@@ -92,6 +93,7 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
       <label>On Trigger</label>
       <select value={node.trigger.type} onChange={(e) => setTriggerType(e.target.value as TriggerType)}>
         <option value="manual">Manual</option>
+        <option value="any">Any of these inputs</option>
         <option value="handoff">New Message (handoff received)</option>
         <option value="interval">Timer (simple interval)</option>
         <option value="timer">Timer (cron)</option>
@@ -242,6 +244,56 @@ function TriggerFields({
   onChange: (t: TriggerConfig) => void;
 }): JSX.Element | null {
   switch (trigger.type) {
+    case "any":
+      return (
+        <div className="trigger-list">
+          {trigger.triggers.map((child, index) => (
+            <div className="trigger-group" key={`${index}:${child.type}`}>
+              <div className="row trigger-group-header">
+                <div>
+                  <label>Input {index + 1}</label>
+                  <select
+                    value={child.type}
+                    onChange={(e) => {
+                      const nextChild = defaultTrigger(e.target.value as TriggerType) as TriggerLeafConfig;
+                      onChange({
+                        ...trigger,
+                        triggers: trigger.triggers.map((candidate, childIndex) => (childIndex === index ? nextChild : candidate))
+                      });
+                    }}
+                  >
+                    {leafTriggerOptions()}
+                  </select>
+                </div>
+                <button
+                  className="secondary"
+                  disabled={trigger.triggers.length <= 1}
+                  onClick={() => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index) })}
+                >
+                  Remove
+                </button>
+              </div>
+              <TriggerFields
+                trigger={child}
+                onChange={(nextChild) =>
+                  onChange({
+                    ...trigger,
+                    triggers: trigger.triggers.map((candidate, childIndex) =>
+                      childIndex === index ? (nextChild as TriggerLeafConfig) : candidate
+                    )
+                  })
+                }
+              />
+            </div>
+          ))}
+          <button
+            className="secondary"
+            onClick={() => onChange({ ...trigger, triggers: [...trigger.triggers, { type: "handoff" }] })}
+          >
+            + Add input
+          </button>
+        </div>
+      );
     case "ghPr":
       return (
         <>
@@ -419,6 +471,8 @@ function TriggerFields({
 
 function defaultTrigger(type: TriggerType): TriggerConfig {
   switch (type) {
+    case "any":
+      return { type: "any", triggers: [{ type: "handoff" }, { type: "interval", every: 30, unit: "minutes" }] };
     case "ghPr":
       return { type: "ghPr", repo: "owner/repo", events: ["opened", "synchronize"], branchFilter: null };
     case "timer":
@@ -438,4 +492,18 @@ function defaultTrigger(type: TriggerType): TriggerConfig {
     case "webhook":
       return { type: "webhook", path: "/agent-orchestrator/webhook", port: 8787, secretEnv: null };
   }
+}
+
+function leafTriggerOptions(): JSX.Element[] {
+  return [
+    <option key="manual" value="manual">Manual</option>,
+    <option key="handoff" value="handoff">New Message (handoff received)</option>,
+    <option key="interval" value="interval">Timer (simple interval)</option>,
+    <option key="timer" value="timer">Timer (cron)</option>,
+    <option key="ghPr" value="ghPr">GitHub PR</option>,
+    <option key="fileChange" value="fileChange">File change</option>,
+    <option key="startup" value="startup">Workspace start</option>,
+    <option key="diagnostics" value="diagnostics">Problems / diagnostics</option>,
+    <option key="webhook" value="webhook">Webhook</option>
+  ];
 }
