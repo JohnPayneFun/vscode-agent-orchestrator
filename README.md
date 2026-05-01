@@ -42,7 +42,7 @@ State lives in `.agent-orchestrator/` at the workspace root:
 | `webhook` | A local HTTP `POST` request hits the node's configured path |
 | `any` | Any child trigger fires, e.g. handoff received or every 30 minutes |
 
-Use `any` when a node needs multiple inputs. For example, a PM node can run on both inbox handoffs and a recurring timer:
+Use `any` when a node needs multiple inputs. In the graph editor, click `+ OR` under a trigger to create another input dropdown; the saved workflow uses `any` behind the scenes. For example, a PM node can run on both inbox handoffs and a recurring timer:
 
 ```jsonc
 {

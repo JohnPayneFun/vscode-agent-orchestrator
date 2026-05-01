@@ -2384,9 +2384,9 @@
           if (typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart === "function") {
             __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
           }
-          var React5 = require_react();
+          var React6 = require_react();
           var Scheduler = require_scheduler();
-          var ReactSharedInternals = React5.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React6.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           var suppressWarning = false;
           function setSuppressWarning(newSuppressWarning) {
             {
@@ -3993,7 +3993,7 @@
             {
               if (props.value == null) {
                 if (typeof props.children === "object" && props.children !== null) {
-                  React5.Children.forEach(props.children, function(child) {
+                  React6.Children.forEach(props.children, function(child) {
                     if (child == null) {
                       return;
                     }
@@ -23589,7 +23589,7 @@
       if (true) {
         (function() {
           "use strict";
-          var React5 = require_react();
+          var React6 = require_react();
           var REACT_ELEMENT_TYPE = Symbol.for("react.element");
           var REACT_PORTAL_TYPE = Symbol.for("react.portal");
           var REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
@@ -23615,7 +23615,7 @@
             }
             return null;
           }
-          var ReactSharedInternals = React5.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+          var ReactSharedInternals = React6.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
           function error(format) {
             {
               {
@@ -24496,7 +24496,7 @@
           return x === y && (0 !== x || 1 / x === 1 / y) || x !== x && y !== y;
         }
         function useSyncExternalStore$2(subscribe, getSnapshot) {
-          didWarnOld18Alpha || void 0 === React5.startTransition || (didWarnOld18Alpha = true, console.error(
+          didWarnOld18Alpha || void 0 === React6.startTransition || (didWarnOld18Alpha = true, console.error(
             "You are using an outdated, pre-release alpha of React 18 that does not support useSyncExternalStore. The use-sync-external-store shim will not work correctly. Upgrade to a newer pre-release."
           ));
           var value = getSnapshot();
@@ -24544,8 +24544,8 @@
           return getSnapshot();
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React5 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState4 = React5.useState, useEffect5 = React5.useEffect, useLayoutEffect2 = React5.useLayoutEffect, useDebugValue2 = React5.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
-        exports.useSyncExternalStore = void 0 !== React5.useSyncExternalStore ? React5.useSyncExternalStore : shim;
+        var React6 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState4 = React6.useState, useEffect5 = React6.useEffect, useLayoutEffect2 = React6.useLayoutEffect, useDebugValue2 = React6.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
+        exports.useSyncExternalStore = void 0 !== React6.useSyncExternalStore ? React6.useSyncExternalStore : shim;
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
       })();
     }
@@ -24572,7 +24572,7 @@
           return x === y && (0 !== x || 1 / x === 1 / y) || x !== x && y !== y;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React5 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React5.useRef, useEffect5 = React5.useEffect, useMemo4 = React5.useMemo, useDebugValue2 = React5.useDebugValue;
+        var React6 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React6.useRef, useEffect5 = React6.useEffect, useMemo4 = React6.useMemo, useDebugValue2 = React6.useDebugValue;
         exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector, isEqual) {
           var instRef = useRef5(null);
           if (null === instRef.current) {
@@ -32428,7 +32428,7 @@
   var import_client = __toESM(require_client());
 
   // webview/src/App.tsx
-  var import_react7 = __toESM(require_react());
+  var import_react8 = __toESM(require_react());
 
   // webview/src/api.ts
   var api = null;
@@ -41597,6 +41597,7 @@
   }
 
   // webview/src/NodeForm.tsx
+  var import_react6 = __toESM(require_react());
   var import_jsx_runtime4 = __toESM(require_jsx_runtime());
   function NodeForm({ node, agents, models, onChange, onDelete }) {
     const set3 = (key, value) => {
@@ -41804,268 +41805,328 @@
   }
   function TriggerFields({
     trigger,
-    onChange
+    onChange,
+    allowOperator = true
   }) {
     switch (trigger.type) {
       case "any":
         return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "trigger-list", children: [
-          trigger.triggers.map((child, index2) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "trigger-group", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row trigger-group-header", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { children: [
-                  "Input ",
-                  index2 + 1
+          trigger.triggers.map((child, index2) => /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_react6.default.Fragment, { children: [
+            index2 > 0 ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "trigger-or-separator", children: "OR" }) : null,
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "trigger-group", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row trigger-group-header", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { children: [
+                    "Input ",
+                    index2 + 1
+                  ] }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                    "select",
+                    {
+                      value: child.type,
+                      onChange: (e) => {
+                        const nextChild = defaultTrigger(e.target.value);
+                        onChange({
+                          ...trigger,
+                          triggers: trigger.triggers.map((candidate, childIndex) => childIndex === index2 ? nextChild : candidate)
+                        });
+                      },
+                      children: leafTriggerOptions()
+                    }
+                  )
                 ] }),
                 /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-                  "select",
+                  "button",
                   {
-                    value: child.type,
-                    onChange: (e) => {
-                      const nextChild = defaultTrigger(e.target.value);
-                      onChange({
-                        ...trigger,
-                        triggers: trigger.triggers.map((candidate, childIndex) => childIndex === index2 ? nextChild : candidate)
-                      });
-                    },
-                    children: leafTriggerOptions()
+                    className: "secondary",
+                    disabled: trigger.triggers.length <= 1,
+                    onClick: () => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index2) }),
+                    children: "Remove"
                   }
                 )
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-                "button",
+                TriggerFields,
                 {
-                  className: "secondary",
-                  disabled: trigger.triggers.length <= 1,
-                  onClick: () => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index2) }),
-                  children: "Remove"
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-              TriggerFields,
-              {
-                trigger: child,
-                onChange: (nextChild) => onChange({
-                  ...trigger,
-                  triggers: trigger.triggers.map(
-                    (candidate, childIndex) => childIndex === index2 ? nextChild : candidate
-                  )
-                })
-              }
-            )
-          ] }, `${index2}:${child.type}`)),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "button",
-            {
-              className: "secondary",
-              onClick: () => onChange({ ...trigger, triggers: [...trigger.triggers, { type: "handoff" }] }),
-              children: "+ Add input"
-            }
-          )
-        ] });
-      case "ghPr":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Repo (owner/repo)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.repo,
-              placeholder: "owner/repo",
-              onChange: (e) => onChange({ ...trigger, repo: e.target.value })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Events" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
-            "select",
-            {
-              multiple: true,
-              value: trigger.events,
-              onChange: (e) => {
-                const values = Array.from(e.target.selectedOptions, (o) => o.value);
-                onChange({ ...trigger, events: values });
-              },
-              style: { height: 80 },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "opened", children: "opened" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "synchronize", children: "synchronize" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "reopened", children: "reopened" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "closed", children: "closed" })
-              ]
-            }
-          )
-        ] });
-      case "timer":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Cron (5-field, local time)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.cron,
-              placeholder: "*/27 * * * *",
-              onChange: (e) => onChange({ ...trigger, cron: e.target.value })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Timezone" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("select", { value: trigger.tz, onChange: (e) => onChange({ ...trigger, tz: e.target.value }), children: [
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "local", children: "local" }),
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "utc", children: "utc" })
-          ] })
-        ] });
-      case "interval":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Every" }),
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-                "input",
-                {
-                  type: "number",
-                  min: 1,
-                  value: trigger.every,
-                  onChange: (e) => onChange({ ...trigger, every: Number(e.target.value) || 1 })
-                }
-              )
-            ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Unit" }),
-              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
-                "select",
-                {
-                  value: trigger.unit,
-                  onChange: (e) => onChange({ ...trigger, unit: e.target.value }),
-                  children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "seconds", children: "seconds" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "minutes", children: "minutes" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hours", children: "hours" }),
-                    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "days", children: "days" })
-                  ]
+                  trigger: child,
+                  allowOperator: false,
+                  onChange: (nextChild) => onChange({
+                    ...trigger,
+                    triggers: trigger.triggers.map(
+                      (candidate, childIndex) => childIndex === index2 ? nextChild : candidate
+                    )
+                  })
                 }
               )
             ] })
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 8 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+          ] }, `${index2}:${child.type}`)),
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "trigger-or-action", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+            "button",
+            {
+              className: "secondary",
+              onClick: () => onChange({ ...trigger, triggers: [...trigger.triggers, defaultAdditionalInput(trigger.triggers)] }),
+              children: "+ OR"
+            }
+          ) })
+        ] });
+      case "ghPr":
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Repo (owner/repo)" }),
             /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
               "input",
               {
-                type: "checkbox",
-                checked: trigger.runOnStart ?? false,
-                style: { width: "auto" },
-                onChange: (e) => onChange({ ...trigger, runOnStart: e.target.checked })
+                value: trigger.repo,
+                placeholder: "owner/repo",
+                onChange: (e) => onChange({ ...trigger, repo: e.target.value })
               }
             ),
-            "Run once when trigger starts"
-          ] }) })
-        ] });
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Events" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+              "select",
+              {
+                multiple: true,
+                value: trigger.events,
+                onChange: (e) => {
+                  const values = Array.from(e.target.selectedOptions, (o) => o.value);
+                  onChange({ ...trigger, events: values });
+                },
+                style: { height: 80 },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "opened", children: "opened" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "synchronize", children: "synchronize" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "reopened", children: "reopened" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "closed", children: "closed" })
+                ]
+              }
+            )
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
+      case "timer":
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Cron (5-field, local time)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.cron,
+                placeholder: "*/27 * * * *",
+                onChange: (e) => onChange({ ...trigger, cron: e.target.value })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Timezone" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("select", { value: trigger.tz, onChange: (e) => onChange({ ...trigger, tz: e.target.value }), children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "local", children: "local" }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "utc", children: "utc" })
+            ] })
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
+      case "interval":
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Every" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                  "input",
+                  {
+                    type: "number",
+                    min: 1,
+                    value: trigger.every,
+                    onChange: (e) => onChange({ ...trigger, every: Number(e.target.value) || 1 })
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { children: [
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Unit" }),
+                /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+                  "select",
+                  {
+                    value: trigger.unit,
+                    onChange: (e) => onChange({ ...trigger, unit: e.target.value }),
+                    children: [
+                      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "seconds", children: "seconds" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "minutes", children: "minutes" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hours", children: "hours" }),
+                      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "days", children: "days" })
+                    ]
+                  }
+                )
+              ] })
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "row", style: { marginTop: 8 }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("label", { style: { display: "flex", alignItems: "center", gap: 6 }, children: [
+              /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+                "input",
+                {
+                  type: "checkbox",
+                  checked: trigger.runOnStart ?? false,
+                  style: { width: "auto" },
+                  onChange: (e) => onChange({ ...trigger, runOnStart: e.target.checked })
+                }
+              ),
+              "Run once when trigger starts"
+            ] }) })
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
       case "fileChange":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Glob pattern" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.glob,
-              placeholder: "src/**/*.ts",
-              onChange: (e) => onChange({ ...trigger, glob: e.target.value })
-            }
-          )
-        ] });
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Glob pattern" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.glob,
+                placeholder: "src/**/*.ts",
+                onChange: (e) => onChange({ ...trigger, glob: e.target.value })
+              }
+            )
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
       case "startup":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Delay after activation (seconds)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              type: "number",
-              min: 0,
-              max: 3600,
-              value: trigger.delaySeconds ?? 3,
-              onChange: (e) => onChange({ ...trigger, delaySeconds: Number(e.target.value) || 0 })
-            }
-          )
-        ] });
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Delay after activation (seconds)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                type: "number",
+                min: 0,
+                max: 3600,
+                value: trigger.delaySeconds ?? 3,
+                onChange: (e) => onChange({ ...trigger, delaySeconds: Number(e.target.value) || 0 })
+              }
+            )
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
       case "diagnostics":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "File glob" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.glob,
-              placeholder: "src/**/*",
-              onChange: (e) => onChange({ ...trigger, glob: e.target.value })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Severity" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
-            "select",
-            {
-              value: trigger.severity,
-              onChange: (e) => onChange({ ...trigger, severity: e.target.value }),
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "any", children: "Any" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "error", children: "Errors" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "warning", children: "Warnings" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "info", children: "Info" }),
-                /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hint", children: "Hints" })
-              ]
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Debounce (milliseconds)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              type: "number",
-              min: 100,
-              max: 6e4,
-              value: trigger.debounceMs ?? 1e3,
-              onChange: (e) => onChange({ ...trigger, debounceMs: Number(e.target.value) || 1e3 })
-            }
-          )
-        ] });
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "File glob" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.glob,
+                placeholder: "src/**/*",
+                onChange: (e) => onChange({ ...trigger, glob: e.target.value })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Severity" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+              "select",
+              {
+                value: trigger.severity,
+                onChange: (e) => onChange({ ...trigger, severity: e.target.value }),
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "any", children: "Any" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "error", children: "Errors" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "warning", children: "Warnings" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "info", children: "Info" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("option", { value: "hint", children: "Hints" })
+                ]
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Debounce (milliseconds)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                type: "number",
+                min: 100,
+                max: 6e4,
+                value: trigger.debounceMs ?? 1e3,
+                onChange: (e) => onChange({ ...trigger, debounceMs: Number(e.target.value) || 1e3 })
+              }
+            )
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
       case "webhook":
-        return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Path" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.path,
-              placeholder: "/agent-orchestrator/security",
-              onChange: (e) => onChange({ ...trigger, path: e.target.value })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Port" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              type: "number",
-              min: 1024,
-              max: 65535,
-              value: trigger.port ?? 8787,
-              onChange: (e) => onChange({ ...trigger, port: Number(e.target.value) || 8787 })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret env var (optional)" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.secretEnv ?? "",
-              placeholder: "AGENT_ORCHESTRATOR_WEBHOOK_SECRET",
-              onChange: (e) => onChange({ ...trigger, secretEnv: e.target.value || null })
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret header" }),
-          /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-            "input",
-            {
-              value: trigger.secretHeader ?? "x-agent-orchestrator-secret",
-              placeholder: "x-agent-orchestrator-secret",
-              onChange: (e) => onChange({ ...trigger, secretHeader: e.target.value || void 0 })
-            }
-          )
-        ] });
+        return withTriggerOperator(
+          /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Path" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.path,
+                placeholder: "/agent-orchestrator/security",
+                onChange: (e) => onChange({ ...trigger, path: e.target.value })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Port" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                type: "number",
+                min: 1024,
+                max: 65535,
+                value: trigger.port ?? 8787,
+                onChange: (e) => onChange({ ...trigger, port: Number(e.target.value) || 8787 })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret env var (optional)" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.secretEnv ?? "",
+                placeholder: "AGENT_ORCHESTRATOR_WEBHOOK_SECRET",
+                onChange: (e) => onChange({ ...trigger, secretEnv: e.target.value || null })
+              }
+            ),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Secret header" }),
+            /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+              "input",
+              {
+                value: trigger.secretHeader ?? "x-agent-orchestrator-secret",
+                placeholder: "x-agent-orchestrator-secret",
+                onChange: (e) => onChange({ ...trigger, secretHeader: e.target.value || void 0 })
+              }
+            )
+          ] }),
+          trigger,
+          onChange,
+          allowOperator
+        );
       case "handoff":
       case "manual":
       default:
-        return null;
+        return withTriggerOperator(null, trigger, onChange, allowOperator);
     }
+  }
+  function withTriggerOperator(fields, trigger, onChange, allowOperator) {
+    if (!allowOperator) return fields;
+    return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(import_jsx_runtime4.Fragment, { children: [
+      fields,
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "trigger-or-action", children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+        "button",
+        {
+          className: "secondary",
+          onClick: () => onChange({ type: "any", triggers: [trigger, defaultAdditionalInput(trigger)] }),
+          children: "+ OR"
+        }
+      ) })
+    ] });
+  }
+  function defaultAdditionalInput(existing) {
+    const triggers = Array.isArray(existing) ? existing : [existing];
+    if (!triggers.some((trigger) => trigger.type === "handoff")) return { type: "handoff" };
+    if (!triggers.some((trigger) => trigger.type === "interval")) return { type: "interval", every: 30, unit: "minutes" };
+    return { type: "manual" };
   }
   function defaultTrigger(type) {
     switch (type) {
@@ -42106,11 +42167,11 @@
   }
 
   // webview/src/LedgerPanel.tsx
-  var import_react6 = __toESM(require_react());
+  var import_react7 = __toESM(require_react());
   var import_jsx_runtime5 = __toESM(require_jsx_runtime());
   function LedgerPanel({ entries }) {
-    const ref = (0, import_react6.useRef)(null);
-    (0, import_react6.useEffect)(() => {
+    const ref = (0, import_react7.useRef)(null);
+    (0, import_react7.useEffect)(() => {
       if (!ref.current) return;
       ref.current.scrollTop = ref.current.scrollHeight;
     }, [entries.length]);
@@ -42158,23 +42219,23 @@
   var EDGE_ACTIVITY_TTL_MS = 12e3;
   var EDGE_ACTIVITY_TICK_MS = 1e3;
   function App() {
-    const [workflow, setWorkflow] = (0, import_react7.useState)(EMPTY_WORKFLOW);
-    const [view, setView] = (0, import_react7.useState)("graph");
-    const [selectedNodeId, setSelectedNodeId] = (0, import_react7.useState)(null);
-    const [selectedEdgeId, setSelectedEdgeId] = (0, import_react7.useState)(null);
-    const [agents, setAgents] = (0, import_react7.useState)([]);
-    const [models, setModels] = (0, import_react7.useState)([]);
-    const [ledger, setLedger] = (0, import_react7.useState)([]);
-    const [status, setStatus] = (0, import_react7.useState)("");
-    const [nowMs, setNowMs] = (0, import_react7.useState)(() => Date.now());
-    const [dirty, setDirty] = (0, import_react7.useState)(false);
-    const initRef = (0, import_react7.useRef)(false);
-    const workflowRef = (0, import_react7.useRef)(workflow);
-    const pendingSaveRef = (0, import_react7.useRef)(null);
-    (0, import_react7.useEffect)(() => {
+    const [workflow, setWorkflow] = (0, import_react8.useState)(EMPTY_WORKFLOW);
+    const [view, setView] = (0, import_react8.useState)("graph");
+    const [selectedNodeId, setSelectedNodeId] = (0, import_react8.useState)(null);
+    const [selectedEdgeId, setSelectedEdgeId] = (0, import_react8.useState)(null);
+    const [agents, setAgents] = (0, import_react8.useState)([]);
+    const [models, setModels] = (0, import_react8.useState)([]);
+    const [ledger, setLedger] = (0, import_react8.useState)([]);
+    const [status, setStatus] = (0, import_react8.useState)("");
+    const [nowMs, setNowMs] = (0, import_react8.useState)(() => Date.now());
+    const [dirty, setDirty] = (0, import_react8.useState)(false);
+    const initRef = (0, import_react8.useRef)(false);
+    const workflowRef = (0, import_react8.useRef)(workflow);
+    const pendingSaveRef = (0, import_react8.useRef)(null);
+    (0, import_react8.useEffect)(() => {
       workflowRef.current = workflow;
     }, [workflow]);
-    (0, import_react7.useEffect)(() => {
+    (0, import_react8.useEffect)(() => {
       const off = onMessage((msg) => {
         switch (msg.type) {
           case "workflow.loaded":
@@ -42227,7 +42288,7 @@
       }
       return off;
     }, []);
-    (0, import_react7.useEffect)(() => {
+    (0, import_react8.useEffect)(() => {
       if (!dirty) return;
       const timer2 = window.setTimeout(() => {
         const snapshot = JSON.stringify(workflowRef.current);
@@ -42237,21 +42298,21 @@
       }, 700);
       return () => window.clearTimeout(timer2);
     }, [dirty, workflow]);
-    (0, import_react7.useEffect)(() => {
+    (0, import_react8.useEffect)(() => {
       if (view !== "graph") return;
       const timer2 = window.setInterval(() => setNowMs(Date.now()), EDGE_ACTIVITY_TICK_MS);
       return () => window.clearInterval(timer2);
     }, [view]);
-    const selectedNode = (0, import_react7.useMemo)(
+    const selectedNode = (0, import_react8.useMemo)(
       () => selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null,
       [selectedNodeId, workflow]
     );
-    const selectedEdge = (0, import_react7.useMemo)(
+    const selectedEdge = (0, import_react8.useMemo)(
       () => selectedEdgeId ? workflow.edges.find((edge) => edge.id === selectedEdgeId) ?? null : null,
       [selectedEdgeId, workflow]
     );
-    const activityByNode = (0, import_react7.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
-    const activityByEdge = (0, import_react7.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
+    const activityByNode = (0, import_react8.useMemo)(() => buildNodeActivity(workflow, ledger), [workflow, ledger]);
+    const activityByEdge = (0, import_react8.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
     const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
     const selectNode = (id2) => {
       setSelectedNodeId(id2);

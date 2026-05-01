@@ -238,64 +238,72 @@ function formatReasoningEffort(effort: ModelReasoningEffort): string {
 
 function TriggerFields({
   trigger,
-  onChange
+  onChange,
+  allowOperator = true
 }: {
   trigger: TriggerConfig;
   onChange: (t: TriggerConfig) => void;
+  allowOperator?: boolean;
 }): JSX.Element | null {
   switch (trigger.type) {
     case "any":
       return (
         <div className="trigger-list">
           {trigger.triggers.map((child, index) => (
-            <div className="trigger-group" key={`${index}:${child.type}`}>
-              <div className="row trigger-group-header">
-                <div>
-                  <label>Input {index + 1}</label>
-                  <select
-                    value={child.type}
-                    onChange={(e) => {
-                      const nextChild = defaultTrigger(e.target.value as TriggerType) as TriggerLeafConfig;
-                      onChange({
-                        ...trigger,
-                        triggers: trigger.triggers.map((candidate, childIndex) => (childIndex === index ? nextChild : candidate))
-                      });
-                    }}
+            <React.Fragment key={`${index}:${child.type}`}>
+              {index > 0 ? <div className="trigger-or-separator">OR</div> : null}
+              <div className="trigger-group">
+                <div className="row trigger-group-header">
+                  <div>
+                    <label>Input {index + 1}</label>
+                    <select
+                      value={child.type}
+                      onChange={(e) => {
+                        const nextChild = defaultTrigger(e.target.value as TriggerType) as TriggerLeafConfig;
+                        onChange({
+                          ...trigger,
+                          triggers: trigger.triggers.map((candidate, childIndex) => (childIndex === index ? nextChild : candidate))
+                        });
+                      }}
+                    >
+                      {leafTriggerOptions()}
+                    </select>
+                  </div>
+                  <button
+                    className="secondary"
+                    disabled={trigger.triggers.length <= 1}
+                    onClick={() => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index) })}
                   >
-                    {leafTriggerOptions()}
-                  </select>
+                    Remove
+                  </button>
                 </div>
-                <button
-                  className="secondary"
-                  disabled={trigger.triggers.length <= 1}
-                  onClick={() => onChange({ ...trigger, triggers: trigger.triggers.filter((_, childIndex) => childIndex !== index) })}
-                >
-                  Remove
-                </button>
+                <TriggerFields
+                  trigger={child}
+                  allowOperator={false}
+                  onChange={(nextChild) =>
+                    onChange({
+                      ...trigger,
+                      triggers: trigger.triggers.map((candidate, childIndex) =>
+                        childIndex === index ? (nextChild as TriggerLeafConfig) : candidate
+                      )
+                    })
+                  }
+                />
               </div>
-              <TriggerFields
-                trigger={child}
-                onChange={(nextChild) =>
-                  onChange({
-                    ...trigger,
-                    triggers: trigger.triggers.map((candidate, childIndex) =>
-                      childIndex === index ? (nextChild as TriggerLeafConfig) : candidate
-                    )
-                  })
-                }
-              />
-            </div>
+            </React.Fragment>
           ))}
-          <button
-            className="secondary"
-            onClick={() => onChange({ ...trigger, triggers: [...trigger.triggers, { type: "handoff" }] })}
-          >
-            + Add input
-          </button>
+          <div className="trigger-or-action">
+            <button
+              className="secondary"
+              onClick={() => onChange({ ...trigger, triggers: [...trigger.triggers, defaultAdditionalInput(trigger.triggers)] })}
+            >
+              + OR
+            </button>
+          </div>
         </div>
       );
     case "ghPr":
-      return (
+      return withTriggerOperator(
         <>
           <label>Repo (owner/repo)</label>
           <input
@@ -320,10 +328,13 @@ function TriggerFields({
             <option value="reopened">reopened</option>
             <option value="closed">closed</option>
           </select>
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "timer":
-      return (
+      return withTriggerOperator(
         <>
           <label>Cron (5-field, local time)</label>
           <input
@@ -336,10 +347,13 @@ function TriggerFields({
             <option value="local">local</option>
             <option value="utc">utc</option>
           </select>
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "interval":
-      return (
+      return withTriggerOperator(
         <>
           <div className="row">
             <div>
@@ -375,10 +389,13 @@ function TriggerFields({
               Run once when trigger starts
             </label>
           </div>
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "fileChange":
-      return (
+      return withTriggerOperator(
         <>
           <label>Glob pattern</label>
           <input
@@ -386,10 +403,13 @@ function TriggerFields({
             placeholder="src/**/*.ts"
             onChange={(e) => onChange({ ...trigger, glob: e.target.value })}
           />
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "startup":
-      return (
+      return withTriggerOperator(
         <>
           <label>Delay after activation (seconds)</label>
           <input
@@ -399,10 +419,13 @@ function TriggerFields({
             value={trigger.delaySeconds ?? 3}
             onChange={(e) => onChange({ ...trigger, delaySeconds: Number(e.target.value) || 0 })}
           />
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "diagnostics":
-      return (
+      return withTriggerOperator(
         <>
           <label>File glob</label>
           <input
@@ -429,10 +452,13 @@ function TriggerFields({
             value={trigger.debounceMs ?? 1000}
             onChange={(e) => onChange({ ...trigger, debounceMs: Number(e.target.value) || 1000 })}
           />
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "webhook":
-      return (
+      return withTriggerOperator(
         <>
           <label>Path</label>
           <input
@@ -460,13 +486,45 @@ function TriggerFields({
             placeholder="x-agent-orchestrator-secret"
             onChange={(e) => onChange({ ...trigger, secretHeader: e.target.value || undefined })}
           />
-        </>
+        </>,
+        trigger,
+        onChange,
+        allowOperator
       );
     case "handoff":
     case "manual":
     default:
-      return null;
+      return withTriggerOperator(null, trigger, onChange, allowOperator);
   }
+}
+
+function withTriggerOperator(
+  fields: JSX.Element | null,
+  trigger: TriggerLeafConfig,
+  onChange: (t: TriggerConfig) => void,
+  allowOperator: boolean
+): JSX.Element | null {
+  if (!allowOperator) return fields;
+  return (
+    <>
+      {fields}
+      <div className="trigger-or-action">
+        <button
+          className="secondary"
+          onClick={() => onChange({ type: "any", triggers: [trigger, defaultAdditionalInput(trigger)] })}
+        >
+          + OR
+        </button>
+      </div>
+    </>
+  );
+}
+
+function defaultAdditionalInput(existing: TriggerLeafConfig | TriggerLeafConfig[]): TriggerLeafConfig {
+  const triggers = Array.isArray(existing) ? existing : [existing];
+  if (!triggers.some((trigger) => trigger.type === "handoff")) return { type: "handoff" };
+  if (!triggers.some((trigger) => trigger.type === "interval")) return { type: "interval", every: 30, unit: "minutes" };
+  return { type: "manual" };
 }
 
 function defaultTrigger(type: TriggerType): TriggerConfig {

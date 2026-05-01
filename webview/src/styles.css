@@ -111,6 +111,25 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 }
 .side-panel .trigger-group-header { align-items: flex-end; }
 .side-panel .trigger-group-header button { flex: 0 0 auto; margin-bottom: 0; }
+.side-panel .trigger-or-separator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  color: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.side-panel .trigger-or-separator::before,
+.side-panel .trigger-or-separator::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--vscode-editorWidget-border, transparent);
+}
+.side-panel .trigger-or-action { margin-top: 8px; }
+.side-panel .trigger-or-action button { width: auto; }
 
 .ledger-panel {
   grid-column: 1 / 3;
