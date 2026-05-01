@@ -18013,7 +18013,13 @@ function buildSystemMessage(node, inboxRoot, agentInstructions) {
     lines.push(agentInstructions.trim());
     lines.push("");
   }
-  lines.push("**Node-specific standing instructions:**");
+  lines.push("**Workflow instruction priority:**");
+  lines.push("1. Node-specific standing instructions are binding workflow policy for every run.");
+  lines.push("2. Pending handoffs are actionable work orders. Act on them now unless they explicitly say to pause or ask a question.");
+  lines.push("3. Direct user messages add context or constraints, but they do not cancel standing instructions or handoff work unless they explicitly say DEBUG, PAUSE, or STOP.");
+  lines.push("4. If instructions conflict, state the conflict briefly and continue with the highest-priority actionable work.");
+  lines.push("");
+  lines.push("**Node-specific standing instructions (workflow policy):**");
   lines.push(node.context.trim() || "(none - proceed with your best judgment)");
   lines.push("");
   lines.push(
@@ -18048,6 +18054,10 @@ function buildSystemMessage(node, inboxRoot, agentInstructions) {
   lines.push("file contents here");
   lines.push("<<END_WRITE_FILE>>");
   lines.push("```");
+  lines.push("");
+  lines.push(
+    "The file write protocol only writes file contents. If your standing instructions require tests, Git, pull requests, MCP updates, or other external actions, you must still perform those actions with the available tools."
+  );
   return lines.join("\n");
 }
 function buildUserMessage(node, drained, cleanedUserText, triggerType) {
@@ -18064,10 +18074,16 @@ function buildUserMessage(node, drained, cleanedUserText, triggerType) {
       lines.push("```");
     }
     lines.push("");
+    lines.push("Treat the pending handoff(s) above as the current work order. Follow your node-specific standing instructions until the work is complete or you hit a real blocker.");
+    lines.push("");
   }
   if (cleanedUserText) {
-    lines.push("**User message:**");
+    lines.push("**User message / additional context:**");
     lines.push(cleanedUserText);
+    if (drained.length > 0) {
+      lines.push("");
+      lines.push("Use this message only as additional context for the handoff unless it explicitly says DEBUG, PAUSE, or STOP.");
+    }
   } else if (drained.length === 0) {
     lines.push(`Run your standing instructions for the **${node.label}** node now.`);
   }
