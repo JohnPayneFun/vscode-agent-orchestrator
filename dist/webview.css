@@ -721,6 +721,9 @@ textarea {
 .ledger-panel .entry.spawn .type {
   color: var(--vscode-charts-green, #3fb950);
 }
+.react-flow__node-persona {
+  width: 260px;
+}
 .persona-node {
   background: var(--vscode-editor-background);
   border: 1.5px solid var(--vscode-editorWidget-border, #555);
@@ -808,7 +811,9 @@ textarea {
   opacity: 0.85;
   max-height: 36px;
   overflow: hidden;
+  white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
   text-overflow: ellipsis;
 }
 .persona-node.disabled {

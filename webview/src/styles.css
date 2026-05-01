@@ -117,6 +117,10 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 .ledger-panel .entry.guardrail .type { color: var(--vscode-errorForeground); }
 .ledger-panel .entry.spawn .type { color: var(--vscode-charts-green, #3fb950); }
 
+.react-flow__node-persona {
+  width: 260px;
+}
+
 .persona-node {
   background: var(--vscode-editor-background);
   border: 1.5px solid var(--vscode-editorWidget-border, #555);
@@ -190,7 +194,9 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   opacity: 0.85;
   max-height: 36px;
   overflow: hidden;
+  white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
   text-overflow: ellipsis;
 }
 .persona-node.disabled { opacity: 0.45; }
