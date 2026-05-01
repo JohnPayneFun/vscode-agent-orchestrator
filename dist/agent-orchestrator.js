@@ -9263,6 +9263,7 @@ function buildSystemMessage(node, inboxRoot, agentInstructions) {
   lines.push(
     "**File write protocol** - if your node needs to create or update a file, emit one or more blocks with this exact format. The extension host will write the file after your response:"
   );
+  lines.push("Do not call Copilot file creation or edit tools for this. Use the block format below instead.");
   lines.push("");
   lines.push("```");
   lines.push("<<WRITE_FILE path=relative/or/absolute/path.md>>");

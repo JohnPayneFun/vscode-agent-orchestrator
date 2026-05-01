@@ -10,6 +10,13 @@ const DEFAULT_TOOL_ROUND_LIMIT = 16;
 const MIN_TOOL_ROUND_LIMIT = 1;
 const MAX_TOOL_ROUND_LIMIT = 50;
 const REPEATED_TOOL_FAILURE_LIMIT = 2;
+const BLOCKED_TOOL_NAMES = new Set([
+  "copilot_createfile",
+  "copilot_editfile",
+  "copilot_insertedit",
+  "copilot_replacestring",
+  "copilot_applypatch"
+]);
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
@@ -224,7 +231,7 @@ function createVsCodeModelProvider(
         family: model.family,
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = vscode.lm.tools.map(toLanguageModelChatTool);
+          const tools = exposedTools().map(toLanguageModelChatTool);
           const failedToolCalls = new Map<string, number>();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -269,6 +276,14 @@ function createVsCodeModelProvider(
       };
     }
   };
+}
+
+function exposedTools(): vscode.LanguageModelToolInformation[] {
+  return vscode.lm.tools.filter((tool) => !isBlockedTool(tool));
+}
+
+function isBlockedTool(tool: vscode.LanguageModelToolInformation): boolean {
+  return BLOCKED_TOOL_NAMES.has(tool.name.toLowerCase());
 }
 
 interface ToolInvocationOutcome {

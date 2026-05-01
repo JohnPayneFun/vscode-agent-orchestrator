@@ -17822,6 +17822,7 @@ function buildSystemMessage(node, inboxRoot, agentInstructions) {
   lines.push(
     "**File write protocol** - if your node needs to create or update a file, emit one or more blocks with this exact format. The extension host will write the file after your response:"
   );
+  lines.push("Do not call Copilot file creation or edit tools for this. Use the block format below instead.");
   lines.push("");
   lines.push("```");
   lines.push("<<WRITE_FILE path=relative/or/absolute/path.md>>");
@@ -17908,6 +17909,13 @@ var DEFAULT_TOOL_ROUND_LIMIT = 16;
 var MIN_TOOL_ROUND_LIMIT = 1;
 var MAX_TOOL_ROUND_LIMIT = 50;
 var REPEATED_TOOL_FAILURE_LIMIT = 2;
+var BLOCKED_TOOL_NAMES = /* @__PURE__ */ new Set([
+  "copilot_createfile",
+  "copilot_editfile",
+  "copilot_insertedit",
+  "copilot_replacestring",
+  "copilot_applypatch"
+]);
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18064,7 +18072,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
         family: model.family,
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = vscode6.lm.tools.map(toLanguageModelChatTool);
+          const tools = exposedTools().map(toLanguageModelChatTool);
           const failedToolCalls = /* @__PURE__ */ new Map();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -18109,6 +18117,12 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
       };
     }
   };
+}
+function exposedTools() {
+  return vscode6.lm.tools.filter((tool) => !isBlockedTool(tool));
+}
+function isBlockedTool(tool) {
+  return BLOCKED_TOOL_NAMES.has(tool.name.toLowerCase());
 }
 function clampToolRoundLimit(value) {
   if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
