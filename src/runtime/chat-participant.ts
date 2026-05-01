@@ -6,7 +6,9 @@ import type { OrchestrationPaths } from "../orchestration/paths.js";
 import { formatNodeReference, nodeSuggestions, resolveWorkflowNode } from "../orchestration/node-resolver.js";
 import { runWorkflowNode, type RuntimeChatMessage, type RuntimeModelProvider } from "./node-runner.js";
 
-const MAX_TOOL_ROUNDS = 6;
+const DEFAULT_TOOL_ROUND_LIMIT = 16;
+const MIN_TOOL_ROUND_LIMIT = 1;
+const MAX_TOOL_ROUND_LIMIT = 50;
 
 export interface ChatParticipantDeps {
   paths: OrchestrationPaths;
@@ -167,9 +169,10 @@ interface RunArgs {
 async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const { deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
+  const toolRoundLimit = clampToolRoundLimit(config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -207,7 +210,8 @@ function chatHistoryToRuntimeMessages(ctx: vscode.ChatContext): RuntimeChatMessa
 function createVsCodeModelProvider(
   request: vscode.ChatRequest,
   stream: vscode.ChatResponseStream,
-  token: vscode.CancellationToken
+  token: vscode.CancellationToken,
+  toolRoundLimit: number
 ): RuntimeModelProvider {
   return {
     async selectModel(selector: ModelSelector | undefined) {
@@ -220,7 +224,7 @@ function createVsCodeModelProvider(
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = vscode.lm.tools.map(toLanguageModelChatTool);
-          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
               requestMessages,
               toLanguageModelRequestOptions(selector, tools),
@@ -246,11 +250,18 @@ function createVsCodeModelProvider(
             }
             requestMessages.push(vscode.LanguageModelChatMessage.User(toolResults));
           }
-          yield "\n\n*Stopped after the maximum number of tool rounds.*";
+          throw new Error(
+            `Stopped after ${toolRoundLimit} tool round(s). The model kept requesting tools, so the run did not complete.`
+          );
         }
       };
     }
   };
+}
+
+function clampToolRoundLimit(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
+  return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
 }
 
 async function invokeToolResultPart(

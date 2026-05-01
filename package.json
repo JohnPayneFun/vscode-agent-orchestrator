@@ -89,6 +89,13 @@
           "default": 60,
           "minimum": 15,
           "description": "How often to poll GitHub for new PRs/commits."
+        },
+        "vscodeAgentOrchestrator.toolRoundLimit": {
+          "type": "number",
+          "default": 16,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Maximum language-model tool-call rounds per orchestrated node run. Raise this for workflows that query several MCP tools before responding."
         }
       }
     }

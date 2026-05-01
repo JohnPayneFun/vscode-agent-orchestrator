@@ -17904,7 +17904,9 @@ function findEdgeId(workflow, from, to) {
 }
 
 // src/runtime/chat-participant.ts
-var MAX_TOOL_ROUNDS = 6;
+var DEFAULT_TOOL_ROUND_LIMIT = 16;
+var MIN_TOOL_ROUND_LIMIT = 1;
+var MAX_TOOL_ROUND_LIMIT = 50;
 function registerChatParticipant(context, deps) {
   const handler = async (request, ctx, stream, token) => {
     try {
@@ -18010,9 +18012,10 @@ function promptEquals(left, right) {
 async function runNode(args) {
   const { deps, node, request, ctx, stream, token, userText } = args;
   const config = vscode6.workspace.getConfiguration("vscodeAgentOrchestrator");
+  const toolRoundLimit = clampToolRoundLimit(config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -18049,7 +18052,7 @@ function chatHistoryToRuntimeMessages(ctx) {
   }
   return messages;
 }
-function createVsCodeModelProvider(request, stream, token) {
+function createVsCodeModelProvider(request, stream, token, toolRoundLimit) {
   return {
     async selectModel(selector) {
       const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
@@ -18061,7 +18064,7 @@ function createVsCodeModelProvider(request, stream, token) {
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
           const tools = vscode6.lm.tools.map(toLanguageModelChatTool);
-          for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+          for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
               requestMessages,
               toLanguageModelRequestOptions(selector, tools),
@@ -18087,11 +18090,17 @@ function createVsCodeModelProvider(request, stream, token) {
             }
             requestMessages.push(vscode6.LanguageModelChatMessage.User(toolResults));
           }
-          yield "\n\n*Stopped after the maximum number of tool rounds.*";
+          throw new Error(
+            `Stopped after ${toolRoundLimit} tool round(s). The model kept requesting tools, so the run did not complete.`
+          );
         }
       };
     }
   };
+}
+function clampToolRoundLimit(value) {
+  if (!Number.isFinite(value)) return DEFAULT_TOOL_ROUND_LIMIT;
+  return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
 }
 async function invokeToolResultPart(toolCall, request, token, stream) {
   try {
