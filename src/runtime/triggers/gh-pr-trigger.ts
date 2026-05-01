@@ -7,27 +7,12 @@ import type { WorkflowNode, TriggerGhPr } from "../../../shared/types.js";
 import type { OrchestrationPaths } from "../../orchestration/paths.js";
 import type { Trigger, TriggerDeps } from "./types.js";
 import type { MessageBus } from "../../orchestration/message-bus.js";
+import { detectGhPrEvents, type GhPrNodeTriggerState, type PrSnapshot } from "./gh-pr-events.js";
 
 const exec = promisify(execFile);
 
-interface PrSnapshot {
-  number: number;
-  headRefOid: string;
-  state: string;
-  title: string;
-  url: string;
-  baseRefName: string;
-  headRefName: string;
-}
-
 interface TriggerState {
-  perNode: Record<
-    string,
-    {
-      lastPolledAt?: string;
-      seen: Record<string, string>; // pr number -> last seen headRefOid
-    }
-  >;
+  perNode: Record<string, GhPrNodeTriggerState>;
 }
 
 export class GhPrTrigger implements Trigger {
@@ -72,11 +57,11 @@ export class GhPrTrigger implements Trigger {
           "--repo",
           this.cfg.repo,
           "--state",
-          "open",
+          "all",
           "--json",
-          "number,headRefOid,state,title,url,baseRefName,headRefName",
+          "number,headRefOid,state,title,url,baseRefName,headRefName,closedAt,mergedAt",
           "--limit",
-          "50"
+          "100"
         ],
         { timeout: 30000 }
       );
@@ -102,24 +87,15 @@ export class GhPrTrigger implements Trigger {
         );
       }
     }
+    const detected = detectGhPrEvents(prs, perNode, this.cfg.events, branchFilter);
 
-    for (const pr of prs) {
-      if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
-      const prevSha = perNode.seen[String(pr.number)];
-      const isNew = prevSha === undefined;
-      const isUpdate = !isNew && prevSha !== pr.headRefOid;
-      const matched =
-        (isNew && this.cfg.events.includes("opened")) ||
-        (isUpdate && this.cfg.events.includes("synchronize"));
-      if (!matched) continue;
-
-      // Pre-deliver the PR snapshot to the node's inbox so the spawned session
-      // sees it as the "incoming handoff" (uniform with downstream nodes).
+    for (const event of detected.events) {
+      const pr = event.pr;
       const payload = this.bus.buildPayload({
         from: "external",
         to: this.node.id,
         edgeId: null,
-        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo },
+        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo, eventKind: event.eventKind },
         payload: {
           prNumber: pr.number,
           prUrl: pr.url,
@@ -127,7 +103,10 @@ export class GhPrTrigger implements Trigger {
           baseRef: pr.baseRefName,
           headRef: pr.headRefName,
           headSha: pr.headRefOid,
-          eventKind: isNew ? "opened" : "synchronize"
+          state: pr.state,
+          closedAt: pr.closedAt ?? null,
+          mergedAt: pr.mergedAt ?? null,
+          eventKind: event.eventKind
         }
       });
       await this.bus.deliver(payload);
@@ -135,16 +114,15 @@ export class GhPrTrigger implements Trigger {
         prNumber: pr.number,
         repo: this.cfg.repo,
         headSha: pr.headRefOid,
-        eventKind: isNew ? "opened" : "synchronize"
+        state: pr.state,
+        eventKind: event.eventKind
       }).catch((err) => {
         this.deps.log(`gh-pr fire threw: ${err instanceof Error ? err.message : err}`, "error");
       });
-
-      perNode.seen[String(pr.number)] = pr.headRefOid;
     }
 
-    perNode.lastPolledAt = new Date().toISOString();
-    state.perNode[this.node.id] = perNode;
+    detected.nextState.lastPolledAt = new Date().toISOString();
+    state.perNode[this.node.id] = detected.nextState;
     await saveState(this.p, state);
   }
 }

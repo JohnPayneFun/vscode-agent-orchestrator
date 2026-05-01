@@ -16917,6 +16917,65 @@ var fs7 = __toESM(require("fs"));
 var path7 = __toESM(require("path"));
 var import_child_process = require("child_process");
 var import_util = require("util");
+
+// src/runtime/triggers/gh-pr-events.ts
+function detectGhPrEvents(prs, perNode, configuredEvents, branchFilter = null) {
+  const seen = normalizeSeen(perNode.seen);
+  const highWatermark = perNode.highestSeenPrNumber ?? highestSeenPrNumber(seen);
+  const isFirstPoll = !perNode.lastPolledAt && perNode.highestSeenPrNumber === void 0 && Object.keys(seen).length === 0;
+  const events = [];
+  let nextHighWatermark = highWatermark;
+  for (const pr of [...prs].sort((left, right) => left.number - right.number)) {
+    if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
+    const previous = seen[String(pr.number)];
+    const eventKind = isFirstPoll ? null : inferPrEventKind(pr, previous, highWatermark, configuredEvents);
+    if (eventKind && configuredEvents.includes(eventKind)) {
+      events.push({ pr, eventKind });
+    }
+    seen[String(pr.number)] = { headRefOid: pr.headRefOid, state: normalizePrState(pr.state) };
+    if (nextHighWatermark === void 0 || pr.number > nextHighWatermark) nextHighWatermark = pr.number;
+  }
+  return {
+    events,
+    nextState: {
+      ...perNode,
+      seen,
+      highestSeenPrNumber: nextHighWatermark
+    }
+  };
+}
+function normalizeSeen(seen) {
+  const normalized = {};
+  for (const [number, value] of Object.entries(seen)) {
+    normalized[number] = typeof value === "string" ? { headRefOid: value, state: "OPEN" } : value;
+  }
+  return normalized;
+}
+function inferPrEventKind(pr, previous, highWatermark, configuredEvents) {
+  const currentState = normalizePrState(pr.state);
+  if (!previous) {
+    if (highWatermark !== void 0 && pr.number <= highWatermark) return null;
+    if (closedPrState(currentState) && configuredEvents.includes("closed")) return "closed";
+    return "opened";
+  }
+  const previousState = normalizePrState(previous.state);
+  if (!closedPrState(previousState) && closedPrState(currentState)) return "closed";
+  if (closedPrState(previousState) && currentState === "OPEN") return "reopened";
+  if (currentState === "OPEN" && previous.headRefOid !== pr.headRefOid) return "synchronize";
+  return null;
+}
+function highestSeenPrNumber(seen) {
+  const numbers = Object.keys(seen).map((value) => Number(value)).filter(Number.isFinite);
+  return numbers.length > 0 ? Math.max(...numbers) : void 0;
+}
+function normalizePrState(state) {
+  return state.trim().toUpperCase();
+}
+function closedPrState(state) {
+  return state === "CLOSED" || state === "MERGED";
+}
+
+// src/runtime/triggers/gh-pr-trigger.ts
 var exec = (0, import_util.promisify)(import_child_process.execFile);
 var GhPrTrigger = class {
   constructor(node, cfg, p, bus, deps) {
@@ -16955,11 +17014,11 @@ var GhPrTrigger = class {
           "--repo",
           this.cfg.repo,
           "--state",
-          "open",
+          "all",
           "--json",
-          "number,headRefOid,state,title,url,baseRefName,headRefName",
+          "number,headRefOid,state,title,url,baseRefName,headRefName,closedAt,mergedAt",
           "--limit",
-          "50"
+          "100"
         ],
         { timeout: 3e4 }
       );
@@ -16984,18 +17043,14 @@ var GhPrTrigger = class {
         );
       }
     }
-    for (const pr of prs) {
-      if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
-      const prevSha = perNode.seen[String(pr.number)];
-      const isNew = prevSha === void 0;
-      const isUpdate = !isNew && prevSha !== pr.headRefOid;
-      const matched = isNew && this.cfg.events.includes("opened") || isUpdate && this.cfg.events.includes("synchronize");
-      if (!matched) continue;
+    const detected = detectGhPrEvents(prs, perNode, this.cfg.events, branchFilter);
+    for (const event of detected.events) {
+      const pr = event.pr;
       const payload = this.bus.buildPayload({
         from: "external",
         to: this.node.id,
         edgeId: null,
-        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo },
+        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo, eventKind: event.eventKind },
         payload: {
           prNumber: pr.number,
           prUrl: pr.url,
@@ -17003,7 +17058,10 @@ var GhPrTrigger = class {
           baseRef: pr.baseRefName,
           headRef: pr.headRefName,
           headSha: pr.headRefOid,
-          eventKind: isNew ? "opened" : "synchronize"
+          state: pr.state,
+          closedAt: pr.closedAt ?? null,
+          mergedAt: pr.mergedAt ?? null,
+          eventKind: event.eventKind
         }
       });
       await this.bus.deliver(payload);
@@ -17011,14 +17069,14 @@ var GhPrTrigger = class {
         prNumber: pr.number,
         repo: this.cfg.repo,
         headSha: pr.headRefOid,
-        eventKind: isNew ? "opened" : "synchronize"
+        state: pr.state,
+        eventKind: event.eventKind
       }).catch((err) => {
         this.deps.log(`gh-pr fire threw: ${err instanceof Error ? err.message : err}`, "error");
       });
-      perNode.seen[String(pr.number)] = pr.headRefOid;
     }
-    perNode.lastPolledAt = (/* @__PURE__ */ new Date()).toISOString();
-    state.perNode[this.node.id] = perNode;
+    detected.nextState.lastPolledAt = (/* @__PURE__ */ new Date()).toISOString();
+    state.perNode[this.node.id] = detected.nextState;
     await saveState(this.p, state);
   }
 };

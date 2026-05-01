@@ -136,7 +136,7 @@ State lives in `.agent-orchestrator/` at the workspace root:
 ├── inbox/<node>/*.json   # pending handoffs for each node
 ├── outbox/<node>/*.json  # last 50 emitted, for inspection
 ├── ledger.jsonl          # append-only audit log
-├── triggers/state.json   # last-seen PR SHAs, cron ticks
+├── triggers/state.json   # last-seen PR numbers/states, cron ticks
 └── runtime/
     └── workflow.schema.json
 ```
@@ -145,7 +145,7 @@ State lives in `.agent-orchestrator/` at the workspace root:
 
 | Type | Wakes the node when ... |
 |---|---|
-| `ghPr` | `gh pr list` polling (default 60s) detects a new or updated PR |
+| `ghPr` | `gh pr list` polling (default 60s) detects a newer PR number, updated head SHA, reopen, or close/merge event |
 | `timer` | A 5-field cron expression matches local (or UTC) time |
 | `interval` | A simple every-N-seconds/minutes/hours/days interval elapses |
 | `handoff` | A new file appears in this node's inbox |
@@ -157,6 +157,8 @@ State lives in `.agent-orchestrator/` at the workspace root:
 | `any` | Any child trigger fires, e.g. handoff received or every 30 minutes |
 
 Use `any` when a node needs multiple inputs. In the graph editor, click `+ OR` under a trigger to create another input dropdown; the saved workflow uses `any` behind the scenes. For example, a PM node can run on both inbox handoffs and a recurring timer:
+
+GitHub PR triggers keep per-node state in `.agent-orchestrator/triggers/state.json`. The first poll establishes the current high-water mark, such as "latest seen PR is 206"; later polls fire when PR 207 appears, even if it was opened and merged between poll ticks. Select `closed` if you want the node to treat fast-merged PRs as close/merge reviews, or `opened` if any newly observed PR number should start the review.
 
 ```jsonc
 {
