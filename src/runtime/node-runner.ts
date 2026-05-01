@@ -349,7 +349,12 @@ function normalizeModelSelector(model: ModelSelector | null | undefined): ModelS
   if (model.family?.trim()) selector.family = model.family.trim();
   if (model.id?.trim()) selector.id = model.id.trim();
   if (model.version?.trim()) selector.version = model.version.trim();
+  if (isModelReasoningEffort(model.reasoningEffort)) selector.reasoningEffort = model.reasoningEffort;
   return Object.keys(selector).length > 0 ? selector : undefined;
+}
+
+function isModelReasoningEffort(value: unknown): value is NonNullable<ModelSelector["reasoningEffort"]> {
+  return value === "none" || value === "low" || value === "medium" || value === "high" || value === "xhigh";
 }
 
 function parseHandoffs(text: string): OutgoingHandoff[] {

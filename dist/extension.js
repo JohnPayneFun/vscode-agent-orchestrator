@@ -12797,8 +12797,8 @@ var require_luxon = __commonJS({
       }
     };
     function explainFromTokens(locale, input, format) {
-      const parser2 = new TokenParser(locale, format);
-      return parser2.explainFromTokens(input);
+      const parser3 = new TokenParser(locale, format);
+      return parser3.explainFromTokens(input);
     }
     function parseFromTokens(locale, input, format) {
       const {
@@ -16231,16 +16231,25 @@ var WORKFLOW_SCHEMA = {
                   vendor: { type: "string", minLength: 1 },
                   family: { type: "string", minLength: 1 },
                   id: { type: "string", minLength: 1 },
-                  version: { type: "string", minLength: 1 }
+                  version: { type: "string", minLength: 1 },
+                  reasoningEffort: { enum: ["none", "low", "medium", "high", "xhigh"] }
                 },
                 anyOf: [
                   { required: ["vendor"] },
                   { required: ["family"] },
                   { required: ["id"] },
-                  { required: ["version"] }
+                  { required: ["version"] },
+                  { required: ["reasoningEffort"] }
                 ]
               }
             ]
+          },
+          display: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              showFullContext: { type: "boolean" }
+            }
           },
           permissions: { enum: ["ask", "allow", "deny"] },
           position: {
@@ -16701,13 +16710,26 @@ var TimerTrigger = class {
   }
 };
 
-// src/runtime/triggers/interval-trigger.ts
+// shared/schedule.ts
+var import_cron_parser2 = __toESM(require_parser());
 var UNIT_MS = {
   seconds: 1e3,
   minutes: 6e4,
   hours: 36e5,
   days: 864e5
 };
+function intervalToMs(cfg) {
+  const every = Math.max(1, Math.floor(cfg.every));
+  return every * UNIT_MS[cfg.unit];
+}
+function nextIntervalDelayMs(cfg, nowMs = Date.now()) {
+  const intervalMs = intervalToMs(cfg);
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) return null;
+  const elapsedMs = nowMs % intervalMs;
+  return elapsedMs === 0 ? intervalMs : intervalMs - elapsedMs;
+}
+
+// src/runtime/triggers/interval-trigger.ts
 var IntervalTrigger = class {
   constructor(node, cfg, deps) {
     this.node = node;
@@ -16716,21 +16738,29 @@ var IntervalTrigger = class {
     this.nodeId = node.id;
   }
   nodeId;
-  interval = null;
+  timeout = null;
   disposed = false;
   start() {
     const intervalMs = intervalToMs(this.cfg);
     if (this.cfg.runOnStart) {
       void this.fire(intervalMs);
     }
-    this.interval = setInterval(() => void this.fire(intervalMs), intervalMs);
+    this.scheduleNext(intervalMs);
   }
   dispose() {
     this.disposed = true;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
     }
+  }
+  scheduleNext(intervalMs) {
+    if (this.disposed) return;
+    const nextMs = nextIntervalDelayMs(this.cfg) ?? intervalMs;
+    this.timeout = setTimeout(async () => {
+      await this.fire(intervalMs);
+      this.scheduleNext(intervalMs);
+    }, Math.max(1e3, nextMs));
   }
   async fire(intervalMs) {
     if (this.disposed) return;
@@ -16749,10 +16779,6 @@ var IntervalTrigger = class {
     }
   }
 };
-function intervalToMs(cfg) {
-  const every = Math.max(1, Math.floor(cfg.every));
-  return every * UNIT_MS[cfg.unit];
-}
 
 // src/runtime/triggers/handoff-trigger.ts
 var vscode2 = __toESM(require("vscode"));
@@ -17812,7 +17838,11 @@ function normalizeModelSelector(model) {
   if (model.family?.trim()) selector.family = model.family.trim();
   if (model.id?.trim()) selector.id = model.id.trim();
   if (model.version?.trim()) selector.version = model.version.trim();
+  if (isModelReasoningEffort(model.reasoningEffort)) selector.reasoningEffort = model.reasoningEffort;
   return Object.keys(selector).length > 0 ? selector : void 0;
+}
+function isModelReasoningEffort(value) {
+  return value === "none" || value === "low" || value === "medium" || value === "high" || value === "xhigh";
 }
 function parseHandoffs(text) {
   const out = [];
@@ -18006,7 +18036,7 @@ function createVsCodeModelProvider(request, stream, token) {
         vendor: model.vendor,
         family: model.family,
         async *sendRequest(messages) {
-          const response = await model.sendRequest(messages.map(toVsCodeMessage), {}, token);
+          const response = await model.sendRequest(messages.map(toVsCodeMessage), toLanguageModelRequestOptions(selector), token);
           for await (const fragment of response.text) {
             yield fragment;
           }
@@ -18035,6 +18065,10 @@ function toLanguageModelSelector(model) {
   if (model.id?.trim()) selector.id = model.id.trim();
   if (model.version?.trim()) selector.version = model.version.trim();
   return Object.keys(selector).length > 0 ? selector : void 0;
+}
+function toLanguageModelRequestOptions(model) {
+  if (!model?.reasoningEffort) return {};
+  return { modelOptions: { reasoningEffort: model.reasoningEffort } };
 }
 async function selectModel(selector, fallback, stream) {
   if (!selector) return fallback;

@@ -724,6 +724,28 @@ textarea {
 .react-flow__node-persona {
   width: 260px;
 }
+.persona-node-shell {
+  width: 100%;
+}
+.trigger-countdown {
+  display: inline-flex;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-charts-orange, #d18616);
+  font-size: 10px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.trigger-countdown.warning {
+  color: var(--vscode-errorForeground, #f85149);
+}
 .persona-node {
   background: var(--vscode-editor-background);
   border: 1.5px solid var(--vscode-editorWidget-border, #555);
@@ -815,6 +837,11 @@ textarea {
   overflow-wrap: anywhere;
   word-break: break-word;
   text-overflow: ellipsis;
+}
+.persona-node.show-full-context .context {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: none;
 }
 .persona-node.disabled {
   opacity: 0.45;

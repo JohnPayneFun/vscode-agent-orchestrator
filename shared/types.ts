@@ -81,6 +81,12 @@ export interface NodePosition {
   y: number;
 }
 
+export interface WorkflowNodeDisplay {
+  showFullContext?: boolean;
+}
+
+export type ModelReasoningEffort = "none" | "low" | "medium" | "high" | "xhigh";
+
 export interface WorkflowNode {
   id: string;
   label: string;
@@ -95,6 +101,7 @@ export interface WorkflowNode {
    * picked in the chat model dropdown).
    */
   model?: ModelSelector | null;
+  display?: WorkflowNodeDisplay;
   position: NodePosition;
   enabled: boolean;
 }
@@ -104,6 +111,7 @@ export interface ModelSelector {
   family?: string;
   id?: string;
   version?: string;
+  reasoningEffort?: ModelReasoningEffort;
 }
 
 export interface AgentOption {

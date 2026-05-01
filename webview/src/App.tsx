@@ -261,6 +261,7 @@ export function App(): JSX.Element {
             workflow={workflow}
             activityByNode={activityByNode}
             activityByEdge={activityByEdge}
+            nowMs={nowMs}
             selectedNodeId={selectedNodeId}
             selectedEdgeId={selectedEdgeId}
             onSelectNode={selectNode}

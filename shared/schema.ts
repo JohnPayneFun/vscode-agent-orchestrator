@@ -118,16 +118,25 @@ export const WORKFLOW_SCHEMA = {
                   vendor: { type: "string", minLength: 1 },
                   family: { type: "string", minLength: 1 },
                   id: { type: "string", minLength: 1 },
-                  version: { type: "string", minLength: 1 }
+                  version: { type: "string", minLength: 1 },
+                  reasoningEffort: { enum: ["none", "low", "medium", "high", "xhigh"] }
                 },
                 anyOf: [
                   { required: ["vendor"] },
                   { required: ["family"] },
                   { required: ["id"] },
-                  { required: ["version"] }
+                  { required: ["version"] },
+                  { required: ["reasoningEffort"] }
                 ]
               }
             ]
+          },
+          display: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              showFullContext: { type: "boolean" }
+            }
           },
           permissions: { enum: ["ask", "allow", "deny"] },
           position: {

@@ -29,6 +29,18 @@ test("workflow schema rejects empty model selector objects", () => {
   assert.match(formatErrors(), /must match/);
 });
 
+test("workflow schema accepts model reasoning effort", () => {
+  const workflow = createWorkflow({ model: { id: "copilot-gpt-5.5", reasoningEffort: "xhigh" } });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
+test("workflow schema accepts reasoning effort with chat picker default model", () => {
+  const workflow = createWorkflow({ model: { reasoningEffort: "high" } });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
 test("workflow schema accepts fileChange triggers", () => {
   const workflow = createWorkflow({ trigger: { type: "fileChange", glob: "src/**/*.ts" } });
 
@@ -37,6 +49,12 @@ test("workflow schema accepts fileChange triggers", () => {
 
 test("workflow schema accepts simple interval triggers", () => {
   const workflow = createWorkflow({ trigger: { type: "interval", every: 2, unit: "hours", runOnStart: true } });
+
+  assert.equal(validate(workflow), true, formatErrors());
+});
+
+test("workflow schema accepts node display options", () => {
+  const workflow = createWorkflow({ display: { showFullContext: true } });
 
   assert.equal(validate(workflow), true, formatErrors());
 });

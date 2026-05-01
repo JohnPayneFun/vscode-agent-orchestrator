@@ -1,16 +1,11 @@
 import type { TriggerInterval, WorkflowNode } from "../../../shared/types.js";
+import { intervalToMs, nextIntervalDelayMs } from "../../../shared/schedule.js";
 import type { Trigger, TriggerDeps } from "./types.js";
-
-const UNIT_MS: Record<TriggerInterval["unit"], number> = {
-  seconds: 1_000,
-  minutes: 60_000,
-  hours: 3_600_000,
-  days: 86_400_000
-};
+export { formatInterval, intervalToMs } from "../../../shared/schedule.js";
 
 export class IntervalTrigger implements Trigger {
   readonly nodeId: string;
-  private interval: NodeJS.Timeout | null = null;
+  private timeout: NodeJS.Timeout | null = null;
   private disposed = false;
 
   constructor(
@@ -26,15 +21,24 @@ export class IntervalTrigger implements Trigger {
     if (this.cfg.runOnStart) {
       void this.fire(intervalMs);
     }
-    this.interval = setInterval(() => void this.fire(intervalMs), intervalMs);
+    this.scheduleNext(intervalMs);
   }
 
   dispose(): void {
     this.disposed = true;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
     }
+  }
+
+  private scheduleNext(intervalMs: number): void {
+    if (this.disposed) return;
+    const nextMs = nextIntervalDelayMs(this.cfg) ?? intervalMs;
+    this.timeout = setTimeout(async () => {
+      await this.fire(intervalMs);
+      this.scheduleNext(intervalMs);
+    }, Math.max(1000, nextMs));
   }
 
   private async fire(intervalMs: number): Promise<void> {
@@ -53,14 +57,4 @@ export class IntervalTrigger implements Trigger {
       );
     }
   }
-}
-
-export function intervalToMs(cfg: TriggerInterval): number {
-  const every = Math.max(1, Math.floor(cfg.every));
-  return every * UNIT_MS[cfg.unit];
-}
-
-export function formatInterval(cfg: TriggerInterval): string {
-  const unit = cfg.every === 1 ? cfg.unit.replace(/s$/, "") : cfg.unit;
-  return `Every ${cfg.every} ${unit}`;
 }

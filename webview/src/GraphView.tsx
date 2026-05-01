@@ -18,12 +18,14 @@ import {
   type EdgeChange
 } from "@xyflow/react";
 import type { Workflow, WorkflowNode } from "../../shared/types.js";
+import { formatCountdown, formatInterval, nextTriggerAt } from "../../shared/schedule.js";
 import type { EdgeActivity, NodeActivity } from "./App.js";
 
 interface Props {
   workflow: Workflow;
   activityByNode: Record<string, NodeActivity>;
   activityByEdge: Record<string, EdgeActivity>;
+  nowMs: number;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   onSelectNode: (id: string | null) => void;
@@ -34,7 +36,7 @@ interface Props {
   onRemoveEdge: (id: string) => void;
 }
 
-type FlowNode = Node<{ wfNode: WorkflowNode; selected: boolean; activity?: NodeActivity }>;
+type FlowNode = Node<{ wfNode: WorkflowNode; selected: boolean; nowMs: number; activity?: NodeActivity }>;
 
 const PERSONA_NODE_WIDTH = 260;
 const PERSONA_NODE_HEIGHT = 116;
@@ -43,29 +45,50 @@ function PersonaNode({ data, selected }: NodeProps<FlowNode>): JSX.Element {
   const node = data.wfNode;
   const activity = data.activity;
   const triggerLabel = describeTrigger(node);
+  const countdown = describeCountdown(node, data.nowMs);
+  const showFullContext = node.display?.showFullContext ?? false;
   return (
-    <div className={`persona-node ${selected ? "selected" : ""} ${node.enabled ? "" : "disabled"} ${activity ? `activity-${activity.status}` : ""}`}>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="handle-in"
-        title="Input — handoffs from upstream nodes arrive here"
-      />
-      <span className="handle-label handle-label-in">IN</span>
-      <div className="trigger-badge">On Trigger: {triggerLabel}</div>
-      {activity ? <div className={`runtime-badge ${activity.status}`} title={activity.detail}>{activity.label}</div> : null}
-      <div className="label">{node.label}</div>
-      <div className="agent">{node.agent}</div>
-      <div className="context">{node.context || <em style={{ opacity: 0.5 }}>(no context)</em>}</div>
-      <span className="handle-label handle-label-out">OUT</span>
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="handle-out"
-        title="Output — drag from here to connect to a downstream node"
-      />
+    <div className="persona-node-shell">
+      {countdown ? <div className={`trigger-countdown ${countdown.tone ?? ""}`} title={countdown.title}>{countdown.label}</div> : null}
+      <div className={`persona-node ${selected ? "selected" : ""} ${node.enabled ? "" : "disabled"} ${activity ? `activity-${activity.status}` : ""} ${showFullContext ? "show-full-context" : ""}`}>
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="handle-in"
+          title="Input — handoffs from upstream nodes arrive here"
+        />
+        <span className="handle-label handle-label-in">IN</span>
+        <div className="trigger-badge">On Trigger: {triggerLabel}</div>
+        {activity ? <div className={`runtime-badge ${activity.status}`} title={activity.detail}>{activity.label}</div> : null}
+        <div className="label">{node.label}</div>
+        <div className="agent">{node.agent}</div>
+        <div className="context" title={node.context || undefined}>{node.context || <em style={{ opacity: 0.5 }}>(no context)</em>}</div>
+        <span className="handle-label handle-label-out">OUT</span>
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="handle-out"
+          title="Output — drag from here to connect to a downstream node"
+        />
+      </div>
     </div>
   );
+}
+
+interface CountdownDescription {
+  label: string;
+  title: string;
+  tone?: "warning";
+}
+
+function describeCountdown(node: WorkflowNode, nowMs: number): CountdownDescription | null {
+  if (!node.enabled || (node.trigger.type !== "timer" && node.trigger.type !== "interval")) return null;
+  const next = nextTriggerAt(node.trigger, nowMs);
+  if (!next) return { label: "Schedule invalid", title: "The timer schedule could not be parsed.", tone: "warning" };
+  return {
+    label: `Next in ${formatCountdown(next.getTime() - nowMs)}`,
+    title: `Next trigger: ${next.toLocaleString()}`
+  };
 }
 
 function describeTrigger(node: WorkflowNode): string {
@@ -75,7 +98,7 @@ function describeTrigger(node: WorkflowNode): string {
     case "timer":
       return `Timer · ${node.trigger.cron}`;
     case "interval":
-      return `Every ${node.trigger.every} ${node.trigger.every === 1 ? node.trigger.unit.replace(/s$/, "") : node.trigger.unit}`;
+      return formatInterval(node.trigger);
     case "handoff":
       return "New Message";
     case "manual":
@@ -105,6 +128,7 @@ function GraphViewInner({
   workflow,
   activityByNode,
   activityByEdge,
+  nowMs,
   selectedNodeId,
   selectedEdgeId,
   onSelectNode,
@@ -122,10 +146,10 @@ function GraphViewInner({
         position: n.position,
         initialWidth: PERSONA_NODE_WIDTH,
         initialHeight: PERSONA_NODE_HEIGHT,
-        data: { wfNode: n, selected: n.id === selectedNodeId, activity: activityByNode[n.id] },
+        data: { wfNode: n, selected: n.id === selectedNodeId, nowMs, activity: activityByNode[n.id] },
         selected: n.id === selectedNodeId
       })),
-    [activityByNode, workflow.nodes, selectedNodeId]
+    [activityByNode, workflow.nodes, nowMs, selectedNodeId]
   );
 
   const flowEdges: Edge[] = useMemo(

@@ -3,6 +3,7 @@ import type {
   WorkflowNode,
   TriggerConfig,
   TriggerType,
+  ModelReasoningEffort,
   ModelSelector,
   AgentOption,
   ModelOption
@@ -33,10 +34,27 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
     onChange({ ...node, model: next });
   };
 
+  const setModelIdentity = (nextModel: ModelOption | null): void => {
+    const reasoningEffort = m?.reasoningEffort;
+    if (!nextModel) {
+      setModel(reasoningEffort ? { reasoningEffort } : null);
+      return;
+    }
+    setModel({ ...selectorFromModel(nextModel), ...(reasoningEffort ? { reasoningEffort } : {}) });
+  };
+
+  const setReasoningEffort = (reasoningEffort: ModelReasoningEffort | null): void => {
+    const base = m ? { ...m } : {};
+    if (reasoningEffort) base.reasoningEffort = reasoningEffort;
+    else delete base.reasoningEffort;
+    setModel(Object.keys(base).length > 0 ? base : null);
+  };
+
   const m = node.model ?? null;
   const selectedAgent = agents.find((agent) => agent.id === node.agent) ?? null;
-  const selectedModel = m ? models.find((model) => modelMatchesSelector(model, m)) ?? null : null;
-  const modelSelectValue = m ? (selectedModel ? modelKey(selectedModel) : "__custom") : "";
+  const hasIdentity = m ? hasModelIdentity(m) : false;
+  const selectedModel = hasIdentity && m ? models.find((model) => modelMatchesSelector(model, m)) ?? null : null;
+  const modelSelectValue = hasIdentity && m ? (selectedModel ? modelKey(selectedModel) : "__custom") : "";
 
   return (
     <div>
@@ -93,6 +111,17 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
         onChange={(e) => set("context", e.target.value)}
         placeholder="You are a security engineer. When you receive a PR diff, ..."
       />
+      <div className="row" style={{ marginTop: 8 }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={node.display?.showFullContext ?? false}
+            style={{ width: "auto" }}
+            onChange={(e) => set("display", { ...(node.display ?? {}), showFullContext: e.target.checked })}
+          />
+          Show full context on node
+        </label>
+      </div>
 
       <h3 style={{ marginTop: 18 }}>Model (optional)</h3>
       <p style={{ fontSize: 11, opacity: 0.7, marginTop: 0 }}>
@@ -104,20 +133,32 @@ export function NodeForm({ node, agents, models, onChange, onDelete }: Props): J
         onChange={(e) => {
           const value = e.target.value;
           if (!value) {
-            setModel(null);
+            setModelIdentity(null);
             return;
           }
           const nextModel = models.find((model) => modelKey(model) === value);
-          setModel(nextModel ? selectorFromModel(nextModel) : m);
+          if (nextModel) setModelIdentity(nextModel);
         }}
       >
         <option value="">Use chat picker default</option>
-        {m && !selectedModel ? <option value="__custom">Custom: {formatModelSelector(m)}</option> : null}
+        {hasIdentity && m && !selectedModel ? <option value="__custom">Custom: {formatModelSelector(m)}</option> : null}
         {models.map((model) => (
           <option key={modelKey(model)} value={modelKey(model)}>
             {model.name} ({model.vendor})
           </option>
         ))}
+      </select>
+      <label>Thinking effort</label>
+      <select
+        value={m?.reasoningEffort ?? ""}
+        onChange={(e) => setReasoningEffort(e.target.value ? (e.target.value as ModelReasoningEffort) : null)}
+      >
+        <option value="">Use model/default</option>
+        <option value="none">None</option>
+        <option value="low">Low</option>
+        <option value="medium">Medium</option>
+        <option value="high">High</option>
+        <option value="xhigh">Extra High</option>
       </select>
       {m ? <p className="field-note">{formatModelSelector(m)}</p> : null}
 
@@ -158,6 +199,10 @@ function modelMatchesSelector(model: ModelOption, selector: ModelSelector): bool
   );
 }
 
+function hasModelIdentity(selector: ModelSelector): boolean {
+  return Boolean(selector.vendor?.trim() || selector.family?.trim() || selector.id?.trim() || selector.version?.trim());
+}
+
 function modelKey(model: ModelOption): string {
   return [model.vendor, model.family, model.id, model.version].join("||");
 }
@@ -167,10 +212,26 @@ function formatModelSelector(selector: ModelSelector): string {
     selector.vendor ? `vendor=${selector.vendor}` : "",
     selector.family ? `family=${selector.family}` : "",
     selector.id ? `id=${selector.id}` : "",
-    selector.version ? `version=${selector.version}` : ""
+    selector.version ? `version=${selector.version}` : "",
+    selector.reasoningEffort ? `thinking=${formatReasoningEffort(selector.reasoningEffort)}` : ""
   ]
     .filter(Boolean)
     .join(", ");
+}
+
+function formatReasoningEffort(effort: ModelReasoningEffort): string {
+  switch (effort) {
+    case "none":
+      return "None";
+    case "low":
+      return "Low";
+    case "medium":
+      return "Medium";
+    case "high":
+      return "High";
+    case "xhigh":
+      return "Extra High";
+  }
 }
 
 function TriggerFields({

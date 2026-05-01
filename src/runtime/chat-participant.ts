@@ -216,7 +216,7 @@ function createVsCodeModelProvider(
         vendor: model.vendor,
         family: model.family,
         async *sendRequest(messages: RuntimeChatMessage[]) {
-          const response = await model.sendRequest(messages.map(toVsCodeMessage), {}, token);
+          const response = await model.sendRequest(messages.map(toVsCodeMessage), toLanguageModelRequestOptions(selector), token);
           for await (const fragment of response.text) {
             yield fragment;
           }
@@ -250,6 +250,11 @@ function toLanguageModelSelector(model: ModelSelector | null | undefined): vscod
   if (model.id?.trim()) selector.id = model.id.trim();
   if (model.version?.trim()) selector.version = model.version.trim();
   return Object.keys(selector).length > 0 ? selector : undefined;
+}
+
+function toLanguageModelRequestOptions(model: ModelSelector | null | undefined): vscode.LanguageModelChatRequestOptions {
+  if (!model?.reasoningEffort) return {};
+  return { modelOptions: { reasoningEffort: model.reasoningEffort } };
 }
 
 async function selectModel(

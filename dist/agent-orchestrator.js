@@ -8663,16 +8663,25 @@ var WORKFLOW_SCHEMA = {
                   vendor: { type: "string", minLength: 1 },
                   family: { type: "string", minLength: 1 },
                   id: { type: "string", minLength: 1 },
-                  version: { type: "string", minLength: 1 }
+                  version: { type: "string", minLength: 1 },
+                  reasoningEffort: { enum: ["none", "low", "medium", "high", "xhigh"] }
                 },
                 anyOf: [
                   { required: ["vendor"] },
                   { required: ["family"] },
                   { required: ["id"] },
-                  { required: ["version"] }
+                  { required: ["version"] },
+                  { required: ["reasoningEffort"] }
                 ]
               }
             ]
+          },
+          display: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              showFullContext: { type: "boolean" }
+            }
           },
           permissions: { enum: ["ask", "allow", "deny"] },
           position: {
@@ -9277,7 +9286,11 @@ function normalizeModelSelector(model) {
   if (model.family?.trim()) selector.family = model.family.trim();
   if (model.id?.trim()) selector.id = model.id.trim();
   if (model.version?.trim()) selector.version = model.version.trim();
+  if (isModelReasoningEffort(model.reasoningEffort)) selector.reasoningEffort = model.reasoningEffort;
   return Object.keys(selector).length > 0 ? selector : void 0;
+}
+function isModelReasoningEffort(value) {
+  return value === "none" || value === "low" || value === "medium" || value === "high" || value === "xhigh";
 }
 function parseHandoffs(text) {
   const out = [];
