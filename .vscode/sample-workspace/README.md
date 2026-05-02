@@ -8,7 +8,7 @@ This folder is opened by the Extension Development Host launch config. It alread
 2. You'll see three nodes connected by edges:
    - **SecAgent** (trigger: GH PR) → **PMAgent** (trigger: New Message) → **LeadDevAgent** (trigger: Timer · `*/27 * * * *`)
 3. Toggle **View as JSON** to see the same graph as raw JSON. Edits in either view round-trip on save.
-4. **To run a node manually**: click a node in the graph, then **▶ Run selected** in the toolbar for a background run. Keep the node selected to watch its **Run Output** panel, or type `@orchestrator /run sec` in the native chat panel (Ctrl+Alt+I) for an interactive chat run.
+4. **To run a node manually**: click a node in the graph, then **▶ Run selected** in the toolbar for a background run. Keep the node selected to watch its **Run Output** panel, right-click the node and choose **View chat** to jump back to it, or type `@orchestrator /run sec` in the native chat panel (Ctrl+Alt+I) for an interactive chat run.
 
 ## Phase-1 verification (the load-bearing test)
 

@@ -83,6 +83,8 @@ Example chat commands:
 
 Watch the graph activity, selected-node **Run Output** panel, and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
 
+Right-click a graph node and choose **View chat** to select that node and jump straight to its latest captured background transcript.
+
 ### 5. MCP and tools
 
 When running inside VS Code, orchestrated nodes can use registered VS Code language-model tools, including MCP tools, through the same chat/tool system used by native Agent mode. If VS Code shows a message such as an MCP server may have new tools or needs to be started, tell the user to click **Start it now**.
@@ -211,6 +213,8 @@ Each completed or errored node run writes a `usage.recorded` ledger entry. VS Co
 Runs that use tools also write `toolUsage.recorded` ledger entries with total calls, tool rounds, failures, the applied limit, whether the cap was reached, and a per-tool breakdown. The graph editor shows total tool calls in the toolbar, workflow-level tool totals, and per-node tool usage when a node is selected.
 
 Background runs write `session.output` ledger entries as text is produced. Select a node in the graph to see the latest captured background transcript in the **Run Output** panel. Manual `@orchestrator` chat runs still stream in native VS Code Chat.
+
+You can also right-click a node and choose **View chat** to focus that transcript directly.
 
 ## Quick start
 

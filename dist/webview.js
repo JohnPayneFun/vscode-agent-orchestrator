@@ -1085,7 +1085,7 @@
             }
             return dispatcher.useContext(Context);
           }
-          function useState4(initialState) {
+          function useState5(initialState) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useState(initialState);
           }
@@ -1097,7 +1097,7 @@
             var dispatcher = resolveDispatcher();
             return dispatcher.useRef(initialValue);
           }
-          function useEffect5(create2, deps) {
+          function useEffect6(create2, deps) {
             var dispatcher = resolveDispatcher();
             return dispatcher.useEffect(create2, deps);
           }
@@ -1880,7 +1880,7 @@
           exports.useContext = useContext2;
           exports.useDebugValue = useDebugValue2;
           exports.useDeferredValue = useDeferredValue;
-          exports.useEffect = useEffect5;
+          exports.useEffect = useEffect6;
           exports.useId = useId;
           exports.useImperativeHandle = useImperativeHandle;
           exports.useInsertionEffect = useInsertionEffect;
@@ -1888,7 +1888,7 @@
           exports.useMemo = useMemo4;
           exports.useReducer = useReducer;
           exports.useRef = useRef5;
-          exports.useState = useState4;
+          exports.useState = useState5;
           exports.useSyncExternalStore = useSyncExternalStore;
           exports.useTransition = useTransition;
           exports.version = ReactVersion;
@@ -24506,7 +24506,7 @@
               "The result of getSnapshot should be cached to avoid an infinite loop"
             ), didWarnUncachedGetSnapshot = true);
           }
-          cachedValue = useState4({
+          cachedValue = useState5({
             inst: { value, getSnapshot }
           });
           var inst = cachedValue[0].inst, forceUpdate = cachedValue[1];
@@ -24518,7 +24518,7 @@
             },
             [subscribe, value, getSnapshot]
           );
-          useEffect5(
+          useEffect6(
             function() {
               checkIfSnapshotChanged(inst) && forceUpdate({ inst });
               return subscribe(function() {
@@ -24544,7 +24544,7 @@
           return getSnapshot();
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React6 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState4 = React6.useState, useEffect5 = React6.useEffect, useLayoutEffect2 = React6.useLayoutEffect, useDebugValue2 = React6.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
+        var React6 = require_react(), objectIs = "function" === typeof Object.is ? Object.is : is, useState5 = React6.useState, useEffect6 = React6.useEffect, useLayoutEffect2 = React6.useLayoutEffect, useDebugValue2 = React6.useDebugValue, didWarnOld18Alpha = false, didWarnUncachedGetSnapshot = false, shim = "undefined" === typeof window || "undefined" === typeof window.document || "undefined" === typeof window.document.createElement ? useSyncExternalStore$1 : useSyncExternalStore$2;
         exports.useSyncExternalStore = void 0 !== React6.useSyncExternalStore ? React6.useSyncExternalStore : shim;
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
       })();
@@ -24572,7 +24572,7 @@
           return x === y && (0 !== x || 1 / x === 1 / y) || x !== x && y !== y;
         }
         "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ && "function" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(Error());
-        var React6 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React6.useRef, useEffect5 = React6.useEffect, useMemo4 = React6.useMemo, useDebugValue2 = React6.useDebugValue;
+        var React6 = require_react(), shim = require_shim(), objectIs = "function" === typeof Object.is ? Object.is : is, useSyncExternalStore = shim.useSyncExternalStore, useRef5 = React6.useRef, useEffect6 = React6.useEffect, useMemo4 = React6.useMemo, useDebugValue2 = React6.useDebugValue;
         exports.useSyncExternalStoreWithSelector = function(subscribe, getSnapshot, getServerSnapshot, selector, isEqual) {
           var instRef = useRef5(null);
           if (null === instRef.current) {
@@ -24615,7 +24615,7 @@
             [getSnapshot, getServerSnapshot, selector, isEqual]
           );
           var value = useSyncExternalStore(subscribe, instRef[0], instRef[1]);
-          useEffect5(
+          useEffect6(
             function() {
               inst.hasValue = true;
               inst.value = value;
@@ -41439,11 +41439,21 @@
     selectedEdgeId,
     onSelectNode,
     onSelectEdge,
+    onViewNodeChat,
     onClearSelection,
     onMove,
     onAddEdge,
     onRemoveEdge
   }) {
+    const [contextMenu, setContextMenu] = (0, import_react3.useState)(null);
+    (0, import_react3.useEffect)(() => {
+      if (!contextMenu) return;
+      const handleKeyDown = (event) => {
+        if (event.key === "Escape") setContextMenu(null);
+      };
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [contextMenu]);
     const flowNodes = (0, import_react3.useMemo)(
       () => workflow.nodes.map((n) => ({
         id: n.id,
@@ -41503,43 +41513,91 @@
       },
       [onAddEdge]
     );
-    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { width: "100%", height: "100%" }, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-      index,
-      {
-        nodes: flowNodes,
-        edges: flowEdges,
-        nodeTypes,
-        onNodesChange: handleNodesChange,
-        onEdgesChange: handleEdgesChange,
-        onConnect: handleConnect,
-        onNodeClick: (_, n) => onSelectNode(n.id),
-        onEdgeClick: (_, edge) => onSelectEdge(edge.id),
-        onEdgeDoubleClick: (_, edge) => onRemoveEdge(edge.id),
-        onPaneClick: onClearSelection,
-        deleteKeyCode: ["Backspace", "Delete"],
-        fitView: true,
-        proOptions: { hideAttribution: true },
-        children: [
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Background, { gap: 16 }),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Controls, { showInteractive: false }),
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-            MiniMap,
-            {
-              pannable: true,
-              zoomable: true,
-              className: "workflow-minimap",
-              bgColor: "var(--vscode-editorWidget-background)",
-              maskColor: "rgba(0, 0, 0, 0.24)",
-              maskStrokeColor: "var(--vscode-focusBorder)",
-              nodeBorderRadius: 2,
-              nodeColor: (node) => miniMapNodeColor(node),
-              nodeStrokeColor: (node) => miniMapNodeStrokeColor(node),
-              nodeStrokeWidth: 2
-            }
-          )
-        ]
-      }
-    ) });
+    const closeContextMenu = (0, import_react3.useCallback)(() => setContextMenu(null), []);
+    const handleNodeContextMenu = (0, import_react3.useCallback)(
+      (event, node) => {
+        event.preventDefault();
+        const flowNode = node;
+        onSelectNode(flowNode.id);
+        const menuWidth = 168;
+        const menuHeight = 48;
+        setContextMenu({
+          nodeId: flowNode.id,
+          label: flowNode.data.wfNode.label || flowNode.id,
+          x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+          y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+        });
+      },
+      [onSelectNode]
+    );
+    const viewContextNodeChat = (0, import_react3.useCallback)(() => {
+      if (!contextMenu) return;
+      onViewNodeChat(contextMenu.nodeId);
+      setContextMenu(null);
+    }, [contextMenu, onViewNodeChat]);
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "graph-view-root", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+        index,
+        {
+          nodes: flowNodes,
+          edges: flowEdges,
+          nodeTypes,
+          onNodesChange: handleNodesChange,
+          onEdgesChange: handleEdgesChange,
+          onConnect: handleConnect,
+          onNodeClick: (_, n) => {
+            closeContextMenu();
+            onSelectNode(n.id);
+          },
+          onNodeContextMenu: handleNodeContextMenu,
+          onEdgeClick: (_, edge) => {
+            closeContextMenu();
+            onSelectEdge(edge.id);
+          },
+          onEdgeDoubleClick: (_, edge) => onRemoveEdge(edge.id),
+          onPaneClick: () => {
+            closeContextMenu();
+            onClearSelection();
+          },
+          onPaneContextMenu: (event) => {
+            event.preventDefault();
+            closeContextMenu();
+          },
+          deleteKeyCode: ["Backspace", "Delete"],
+          fitView: true,
+          proOptions: { hideAttribution: true },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Background, { gap: 16 }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Controls, { showInteractive: false }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+              MiniMap,
+              {
+                pannable: true,
+                zoomable: true,
+                className: "workflow-minimap",
+                bgColor: "var(--vscode-editorWidget-background)",
+                maskColor: "rgba(0, 0, 0, 0.24)",
+                maskStrokeColor: "var(--vscode-focusBorder)",
+                nodeBorderRadius: 2,
+                nodeColor: (node) => miniMapNodeColor(node),
+                nodeStrokeColor: (node) => miniMapNodeStrokeColor(node),
+                nodeStrokeWidth: 2
+              }
+            )
+          ]
+        }
+      ),
+      contextMenu ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+        "div",
+        {
+          className: "node-context-menu",
+          role: "menu",
+          "aria-label": `Actions for ${contextMenu.label}`,
+          style: { left: contextMenu.x, top: contextMenu.y },
+          children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", onClick: viewContextNodeChat, children: "View chat" })
+        }
+      ) : null
+    ] });
   }
   function miniMapNodeColor(node) {
     if (node.selected) return "#d18616";
@@ -42301,9 +42359,11 @@
     const [status, setStatus] = (0, import_react8.useState)("");
     const [nowMs, setNowMs] = (0, import_react8.useState)(() => Date.now());
     const [dirty, setDirty] = (0, import_react8.useState)(false);
+    const [runOutputFocusRequest, setRunOutputFocusRequest] = (0, import_react8.useState)(0);
     const initRef = (0, import_react8.useRef)(false);
     const workflowRef = (0, import_react8.useRef)(workflow);
     const pendingSaveRef = (0, import_react8.useRef)(null);
+    const runOutputPanelRef = (0, import_react8.useRef)(null);
     (0, import_react8.useEffect)(() => {
       workflowRef.current = workflow;
     }, [workflow]);
@@ -42378,6 +42438,14 @@
       const timer2 = window.setInterval(() => setNowMs(Date.now()), EDGE_ACTIVITY_TICK_MS);
       return () => window.clearInterval(timer2);
     }, [view]);
+    (0, import_react8.useEffect)(() => {
+      if (runOutputFocusRequest === 0) return;
+      const timer2 = window.setTimeout(() => {
+        runOutputPanelRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+        runOutputPanelRef.current?.focus({ preventScroll: true });
+      }, 0);
+      return () => window.clearTimeout(timer2);
+    }, [runOutputFocusRequest, selectedNodeId]);
     const selectedNode = (0, import_react8.useMemo)(
       () => selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null,
       [selectedNodeId, workflow]
@@ -42406,6 +42474,10 @@
     const clearSelection = () => {
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
+    };
+    const viewNodeChat = (id2) => {
+      selectNode(id2);
+      setRunOutputFocusRequest((request) => request + 1);
     };
     const updateNode = (next) => {
       setWorkflow((wf) => ({
@@ -42513,6 +42585,7 @@
           selectedEdgeId,
           onSelectNode: selectNode,
           onSelectEdge: selectEdge,
+          onViewNodeChat: viewNodeChat,
           onClearSelection: clearSelection,
           onMove: moveNode,
           onAddEdge: addEdge2,
@@ -42533,7 +42606,7 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeRunOutputPanel, { output: selectedRunOutput }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeRunOutputPanel, { output: selectedRunOutput, panelRef: runOutputPanelRef }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeToolUsagePanel, { usage: selectedToolUsage ?? emptyToolUsage() })
       ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
@@ -42597,9 +42670,9 @@
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
     ] });
   }
-  function NodeRunOutputPanel({ output }) {
+  function NodeRunOutputPanel({ output, panelRef }) {
     const text = output?.chunks.join("") ?? "";
-    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel run-output-panel", children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { ref: panelRef, className: "activity-panel run-output-panel", tabIndex: -1, children: [
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Run Output" }),
       output ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [

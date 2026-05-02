@@ -92,9 +92,11 @@ export function App(): JSX.Element {
   const [status, setStatus] = useState<string>("");
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [dirty, setDirty] = useState(false);
+  const [runOutputFocusRequest, setRunOutputFocusRequest] = useState(0);
   const initRef = useRef(false);
   const workflowRef = useRef(workflow);
   const pendingSaveRef = useRef<string | null>(null);
+  const runOutputPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     workflowRef.current = workflow;
@@ -174,6 +176,15 @@ export function App(): JSX.Element {
     return () => window.clearInterval(timer);
   }, [view]);
 
+  useEffect(() => {
+    if (runOutputFocusRequest === 0) return;
+    const timer = window.setTimeout(() => {
+      runOutputPanelRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      runOutputPanelRef.current?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [runOutputFocusRequest, selectedNodeId]);
+
   const selectedNode = useMemo(
     () => (selectedNodeId ? workflow.nodes.find((n) => n.id === selectedNodeId) ?? null : null),
     [selectedNodeId, workflow]
@@ -205,6 +216,11 @@ export function App(): JSX.Element {
   const clearSelection = (): void => {
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
+  };
+
+  const viewNodeChat = (id: string): void => {
+    selectNode(id);
+    setRunOutputFocusRequest((request) => request + 1);
   };
 
   const updateNode = (next: WorkflowNode): void => {
@@ -319,6 +335,7 @@ export function App(): JSX.Element {
             selectedEdgeId={selectedEdgeId}
             onSelectNode={selectNode}
             onSelectEdge={selectEdge}
+            onViewNodeChat={viewNodeChat}
             onClearSelection={clearSelection}
             onMove={moveNode}
             onAddEdge={addEdge}
@@ -342,7 +359,7 @@ export function App(): JSX.Element {
               onDelete={() => deleteNode(selectedNode.id)}
             />
             <NodeActivityPanel activity={selectedActivity} />
-            <NodeRunOutputPanel output={selectedRunOutput} />
+            <NodeRunOutputPanel output={selectedRunOutput} panelRef={runOutputPanelRef} />
             <NodeUsagePanel usage={selectedUsage ?? emptyUsage()} />
             <NodeToolUsagePanel usage={selectedToolUsage ?? emptyToolUsage()} />
           </>
@@ -405,10 +422,10 @@ export function App(): JSX.Element {
   );
 }
 
-function NodeRunOutputPanel({ output }: { output: NodeRunOutput | null }): JSX.Element {
+function NodeRunOutputPanel({ output, panelRef }: { output: NodeRunOutput | null; panelRef?: React.Ref<HTMLDivElement> }): JSX.Element {
   const text = output?.chunks.join("") ?? "";
   return (
-    <div className="activity-panel run-output-panel">
+    <div ref={panelRef} className="activity-panel run-output-panel" tabIndex={-1}>
       <h3>Run Output</h3>
       {output ? (
         <>

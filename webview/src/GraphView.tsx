@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -30,6 +30,7 @@ interface Props {
   selectedEdgeId: string | null;
   onSelectNode: (id: string | null) => void;
   onSelectEdge: (id: string | null) => void;
+  onViewNodeChat: (id: string) => void;
   onClearSelection: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onAddEdge: (from: string, to: string) => void;
@@ -37,6 +38,13 @@ interface Props {
 }
 
 type FlowNode = Node<{ wfNode: WorkflowNode; selected: boolean; nowMs: number; activity?: NodeActivity }>;
+
+interface NodeContextMenuState {
+  nodeId: string;
+  label: string;
+  x: number;
+  y: number;
+}
 
 const PERSONA_NODE_WIDTH = 260;
 const PERSONA_NODE_HEIGHT = 116;
@@ -143,11 +151,23 @@ function GraphViewInner({
   selectedEdgeId,
   onSelectNode,
   onSelectEdge,
+  onViewNodeChat,
   onClearSelection,
   onMove,
   onAddEdge,
   onRemoveEdge
 }: Props): JSX.Element {
+  const [contextMenu, setContextMenu] = useState<NodeContextMenuState | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [contextMenu]);
+
   const flowNodes: FlowNode[] = useMemo(
     () =>
       workflow.nodes.map((n) => ({
@@ -215,8 +235,33 @@ function GraphViewInner({
     [onAddEdge]
   );
 
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      const flowNode = node as FlowNode;
+      onSelectNode(flowNode.id);
+      const menuWidth = 168;
+      const menuHeight = 48;
+      setContextMenu({
+        nodeId: flowNode.id,
+        label: flowNode.data.wfNode.label || flowNode.id,
+        x: Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8)),
+        y: Math.max(8, Math.min(event.clientY, window.innerHeight - menuHeight - 8))
+      });
+    },
+    [onSelectNode]
+  );
+
+  const viewContextNodeChat = useCallback(() => {
+    if (!contextMenu) return;
+    onViewNodeChat(contextMenu.nodeId);
+    setContextMenu(null);
+  }, [contextMenu, onViewNodeChat]);
+
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div className="graph-view-root">
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}
@@ -224,10 +269,24 @@ function GraphViewInner({
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
-        onNodeClick={(_, n) => onSelectNode(n.id)}
-        onEdgeClick={(_, edge) => onSelectEdge(edge.id)}
+        onNodeClick={(_, n) => {
+          closeContextMenu();
+          onSelectNode(n.id);
+        }}
+        onNodeContextMenu={handleNodeContextMenu}
+        onEdgeClick={(_, edge) => {
+          closeContextMenu();
+          onSelectEdge(edge.id);
+        }}
         onEdgeDoubleClick={(_, edge) => onRemoveEdge(edge.id)}
-        onPaneClick={onClearSelection}
+        onPaneClick={() => {
+          closeContextMenu();
+          onClearSelection();
+        }}
+        onPaneContextMenu={(event) => {
+          event.preventDefault();
+          closeContextMenu();
+        }}
         deleteKeyCode={["Backspace", "Delete"]}
         fitView
         proOptions={{ hideAttribution: true }}
@@ -247,6 +306,16 @@ function GraphViewInner({
           nodeStrokeWidth={2}
         />
       </ReactFlow>
+      {contextMenu ? (
+        <div
+          className="node-context-menu"
+          role="menu"
+          aria-label={`Actions for ${contextMenu.label}`}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button type="button" role="menuitem" onClick={viewContextNodeChat}>View chat</button>
+        </div>
+      ) : null}
     </div>
   );
 }
