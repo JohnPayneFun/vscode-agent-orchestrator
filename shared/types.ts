@@ -201,6 +201,7 @@ export type LedgerEventType =
   | "attempt.hookSucceeded"
   | "attempt.hookFailed"
   | "trigger.fired"
+  | "session.output"
   | "session.spawned"
   | "session.errored"
   | "usage.recorded"

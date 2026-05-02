@@ -81,7 +81,7 @@ Example chat commands:
 @orchestrator Lead Dev resume
 ```
 
-Watch the graph activity and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
+Watch the graph activity, selected-node **Run Output** panel, and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
 
 ### 5. MCP and tools
 
@@ -130,7 +130,7 @@ Manual chat remains available through the single chat participant, **`@orchestra
 @orchestrator /run sec [triggered:ghPr:prNumber=42]
 ```
 
-Both paths read the node's config from your workflow file, drain pending handoffs from the node's inbox, call the selected VS Code language model, parse any `<<HANDOFF target=NODE_ID>>{...}<<END>>` blocks in the response, and write JSON handoffs to target inboxes. Background dispatch writes progress to the ledger and graph activity instead of streaming into one chat panel. Set `vscodeAgentOrchestrator.dispatchMode` to `chat` to restore the legacy behavior where triggers open the native chat panel with a prefilled query.
+Both paths read the node's config from your workflow file, drain pending handoffs from the node's inbox, call the selected VS Code language model, parse any `<<HANDOFF target=NODE_ID>>{...}<<END>>` blocks in the response, and write JSON handoffs to target inboxes. Background dispatch writes progress and captured output to the ledger and selected-node **Run Output** panel instead of streaming into one chat panel. Set `vscodeAgentOrchestrator.dispatchMode` to `chat` to restore the legacy behavior where triggers open the native chat panel with a prefilled query.
 
 State lives in `.agent-orchestrator/` at the workspace root:
 
@@ -210,6 +210,8 @@ Each completed or errored node run writes a `usage.recorded` ledger entry. VS Co
 
 Runs that use tools also write `toolUsage.recorded` ledger entries with total calls, tool rounds, failures, the applied limit, whether the cap was reached, and a per-tool breakdown. The graph editor shows total tool calls in the toolbar, workflow-level tool totals, and per-node tool usage when a node is selected.
 
+Background runs write `session.output` ledger entries as text is produced. Select a node in the graph to see the latest captured background transcript in the **Run Output** panel. Manual `@orchestrator` chat runs still stream in native VS Code Chat.
+
 ## Quick start
 
 ```sh
@@ -225,7 +227,7 @@ In the dev host window:
 
 1. `Ctrl+Shift+P` → **Agent Orchestrator: Open Graph Editor**
 2. Click a node → ▶ Run selected (or type `@orchestrator /run sec` in the native chat)
-3. The native chat panel streams the response using your selected model
+3. Graph runs show their captured transcript in the selected node's **Run Output** panel; chat commands still stream in the native chat panel.
 
 ## Local install
 

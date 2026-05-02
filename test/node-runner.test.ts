@@ -143,6 +143,27 @@ test("node runner records tool usage when a model reports tool stats", async () 
   });
 });
 
+test("node runner records output chunks when requested", async () => {
+  await withRuntime(async ({ bus, ledger, p, workflow }) => {
+    const fake = fakeModelProvider(["First ", "second."]);
+
+    await runWorkflowNode({
+      deps: deps({ bus, ledger, p, workflow, modelProvider: fake.provider }),
+      node: workflow.nodes[1],
+      source: "headless-test",
+      spawner: "headless-test",
+      recordOutput: true
+    });
+
+    const entries = await ledger.tail();
+    const output = entries.find((entry) => entry.type === "session.output");
+    assert.ok(output);
+    assert.equal(output.node, "node_2");
+    assert.equal(output.content, "First second.");
+    assert.equal(output.sequence, 0);
+  });
+});
+
 function deps(args: {
   bus: MessageBus;
   ledger: Ledger;

@@ -42390,9 +42390,11 @@
     const activityByEdge = (0, import_react8.useMemo)(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
     const tokenUsage = (0, import_react8.useMemo)(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
     const toolUsage = (0, import_react8.useMemo)(() => buildToolUsage(workflow, ledger), [workflow, ledger]);
+    const runOutputByNode = (0, import_react8.useMemo)(() => buildNodeRunOutput(workflow, ledger), [workflow, ledger]);
     const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
     const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
     const selectedToolUsage = selectedNode ? toolUsage.byNode[selectedNode.id] ?? emptyToolUsage() : null;
+    const selectedRunOutput = selectedNode ? runOutputByNode[selectedNode.id] ?? null : null;
     const selectNode = (id2) => {
       setSelectedNodeId(id2);
       setSelectedEdgeId(null);
@@ -42531,6 +42533,7 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeRunOutputPanel, { output: selectedRunOutput }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeToolUsagePanel, { usage: selectedToolUsage ?? emptyToolUsage() })
       ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
@@ -42592,6 +42595,23 @@
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(WorkflowToolUsagePanel, { usage: toolUsage.total })
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
+    ] });
+  }
+  function NodeRunOutputPanel({ output }) {
+    const text = output?.chunks.join("") ?? "";
+    return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "activity-panel run-output-panel", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Run Output" }),
+      output ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          output.status,
+          output.updatedAt ? ` \xB7 ${shortTime2(output.updatedAt)}` : ""
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("pre", { className: "run-output-text", children: text || output.error || "No text output captured for this run yet." }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
+          "Event: ",
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("code", { children: output.eventId })
+        ] })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("p", { className: "field-note", children: "No captured background output yet. Manual @orchestrator chat runs still appear in VS Code Chat." })
     ] });
   }
   function NodeToolUsagePanel({ usage }) {
@@ -42762,6 +42782,61 @@
       addToolUsage(total, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
     }
     return { total, byNode };
+  }
+  function buildNodeRunOutput(workflow, entries) {
+    const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+    const byEvent = /* @__PURE__ */ new Map();
+    const latestByNode = {};
+    const touchLatest = (nodeId, output) => {
+      const previous = latestByNode[nodeId];
+      if (!previous || Date.parse(output.updatedAt ?? output.startedAt ?? "") >= Date.parse(previous.updatedAt ?? previous.startedAt ?? "")) {
+        latestByNode[nodeId] = output;
+      }
+    };
+    const ensureOutput = (nodeId, eventId, ts) => {
+      const key = `${nodeId}:${eventId}`;
+      let output = byEvent.get(key);
+      if (!output) {
+        output = { nodeId, eventId, status: "running", chunks: [], startedAt: ts, updatedAt: ts };
+        byEvent.set(key, output);
+      }
+      return output;
+    };
+    for (const entry of entries) {
+      const node = typeof entry.node === "string" ? entry.node : void 0;
+      const eventId = typeof entry.eventId === "string" ? entry.eventId : void 0;
+      if (!node || !eventId || !nodeIds.has(node)) continue;
+      if (entry.type === "trigger.fired") {
+        const output = ensureOutput(node, eventId, entry.ts);
+        output.status = "running";
+        output.updatedAt = entry.ts;
+        touchLatest(node, output);
+        continue;
+      }
+      if (entry.type === "session.output") {
+        const output = ensureOutput(node, eventId, entry.ts);
+        if (typeof entry.content === "string") output.chunks.push(entry.content);
+        if (output.status !== "completed" && output.status !== "errored") output.status = "running";
+        output.updatedAt = entry.ts;
+        touchLatest(node, output);
+        continue;
+      }
+      if (entry.type === "session.spawned") {
+        const output = ensureOutput(node, eventId, entry.ts);
+        output.status = "completed";
+        output.updatedAt = entry.ts;
+        touchLatest(node, output);
+        continue;
+      }
+      if (entry.type === "session.errored") {
+        const output = ensureOutput(node, eventId, entry.ts);
+        output.status = "errored";
+        output.error = typeof entry.error === "string" ? entry.error : "Session errored.";
+        output.updatedAt = entry.ts;
+        touchLatest(node, output);
+      }
+    }
+    return latestByNode;
   }
   function emptyUsage() {
     return { inputTokens: 0, outputTokens: 0, totalTokens: 0, runs: 0, estimatedRuns: 0 };

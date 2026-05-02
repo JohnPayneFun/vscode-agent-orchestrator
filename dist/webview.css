@@ -705,6 +705,21 @@ textarea {
   font-weight: 650;
   line-height: 1.2;
 }
+.side-panel .run-output-panel .run-output-text {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  border-radius: 4px;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  font-family: var(--vscode-editor-font-family);
+  font-size: 11px;
+  line-height: 1.35;
+}
 .side-panel .tool-breakdown {
   list-style: none;
   margin: 8px 0 0;

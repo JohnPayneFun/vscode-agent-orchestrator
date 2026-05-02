@@ -9099,7 +9099,29 @@ async function runWorkflowNode(args) {
   const eventId = (0, import_ulid3.ulid)();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
+  let outputSequence = 0;
+  let outputBuffer = "";
+  let lastOutputFlushMs = Date.now();
+  const flushOutput = async (force = false) => {
+    if (!args.recordOutput || outputBuffer.length === 0) return;
+    if (!force && outputBuffer.length < 800 && Date.now() - lastOutputFlushMs < 1e3) return;
+    const content = outputBuffer;
+    outputBuffer = "";
+    lastOutputFlushMs = Date.now();
+    await deps.ledger.append({
+      type: "session.output",
+      node: node.id,
+      eventId,
+      content,
+      sequence: outputSequence++,
+      detail: { source, spawner }
+    });
+  };
   const emit = async (markdown) => {
+    if (args.recordOutput && markdown) {
+      outputBuffer += markdown;
+      await flushOutput(false);
+    }
     await args.onMarkdown?.(markdown);
   };
   const triggerInfo = parseTriggerTag(userText);
@@ -9155,6 +9177,7 @@ async function runWorkflowNode(args) {
   const modelSelector = normalizeModelSelector(node.model);
   if (args.dryRun) {
     await emit("`dryRun` is enabled - skipping the model call.");
+    await flushOutput(true);
     await deps.ledger.append({
       type: "session.spawned",
       node: node.id,
@@ -9183,6 +9206,7 @@ async function runWorkflowNode(args) {
       await emit(fragment);
     }
   } catch (err) {
+    await flushOutput(true);
     const message = err instanceof Error ? err.message : String(err);
     if (inputTokenCount && model) {
       await recordUsage({
@@ -9204,6 +9228,7 @@ async function runWorkflowNode(args) {
     });
     throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
   }
+  await flushOutput(true);
   await deps.ledger.append({
     type: "session.spawned",
     node: node.id,
@@ -9273,6 +9298,7 @@ async function runWorkflowNode(args) {
 `);
     }
   }
+  await flushOutput(true);
   return {
     nodeId: node.id,
     eventId,

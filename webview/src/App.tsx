@@ -56,6 +56,15 @@ interface WorkflowToolUsage {
   byNode: Record<string, ToolUsageSummary>;
 }
 
+interface NodeRunOutput {
+  eventId: string;
+  status: "running" | "completed" | "errored";
+  chunks: string[];
+  startedAt?: string;
+  updatedAt?: string;
+  error?: string;
+}
+
 const EMPTY_WORKFLOW: Workflow = {
   $schema: "./runtime/workflow.schema.json",
   version: 1,
@@ -177,9 +186,11 @@ export function App(): JSX.Element {
   const activityByEdge = useMemo(() => buildEdgeActivity(workflow, ledger, nowMs), [workflow, ledger, nowMs]);
   const tokenUsage = useMemo(() => buildTokenUsage(workflow, ledger), [workflow, ledger]);
   const toolUsage = useMemo(() => buildToolUsage(workflow, ledger), [workflow, ledger]);
+  const runOutputByNode = useMemo(() => buildNodeRunOutput(workflow, ledger), [workflow, ledger]);
   const selectedActivity = selectedNode ? activityByNode[selectedNode.id] : null;
   const selectedUsage = selectedNode ? tokenUsage.byNode[selectedNode.id] ?? emptyUsage() : null;
   const selectedToolUsage = selectedNode ? toolUsage.byNode[selectedNode.id] ?? emptyToolUsage() : null;
+  const selectedRunOutput = selectedNode ? runOutputByNode[selectedNode.id] ?? null : null;
 
   const selectNode = (id: string | null): void => {
     setSelectedNodeId(id);
@@ -331,6 +342,7 @@ export function App(): JSX.Element {
               onDelete={() => deleteNode(selectedNode.id)}
             />
             <NodeActivityPanel activity={selectedActivity} />
+            <NodeRunOutputPanel output={selectedRunOutput} />
             <NodeUsagePanel usage={selectedUsage ?? emptyUsage()} />
             <NodeToolUsagePanel usage={selectedToolUsage ?? emptyToolUsage()} />
           </>
@@ -389,6 +401,26 @@ export function App(): JSX.Element {
       </div>
 
       <LedgerPanel entries={ledger} />
+    </div>
+  );
+}
+
+function NodeRunOutputPanel({ output }: { output: NodeRunOutput | null }): JSX.Element {
+  const text = output?.chunks.join("") ?? "";
+  return (
+    <div className="activity-panel run-output-panel">
+      <h3>Run Output</h3>
+      {output ? (
+        <>
+          <p className="field-note">
+            {output.status}{output.updatedAt ? ` · ${shortTime(output.updatedAt)}` : ""}
+          </p>
+          <pre className="run-output-text">{text || output.error || "No text output captured for this run yet."}</pre>
+          <p className="field-note">Event: <code>{output.eventId}</code></p>
+        </>
+      ) : (
+        <p className="field-note">No captured background output yet. Manual @orchestrator chat runs still appear in VS Code Chat.</p>
+      )}
     </div>
   );
 }
@@ -560,6 +592,67 @@ function buildToolUsage(workflow: Workflow, entries: LedgerEntry[]): WorkflowToo
     addToolUsage(total, toolCalls, toolRounds, failedToolCalls, reachedLimit, entry.tools);
   }
   return { total, byNode };
+}
+
+function buildNodeRunOutput(workflow: Workflow, entries: LedgerEntry[]): Record<string, NodeRunOutput> {
+  const nodeIds = new Set(workflow.nodes.map((node) => node.id));
+  const byEvent = new Map<string, NodeRunOutput & { nodeId: string }>();
+  const latestByNode: Record<string, NodeRunOutput> = {};
+
+  const touchLatest = (nodeId: string, output: NodeRunOutput): void => {
+    const previous = latestByNode[nodeId];
+    if (!previous || Date.parse(output.updatedAt ?? output.startedAt ?? "") >= Date.parse(previous.updatedAt ?? previous.startedAt ?? "")) {
+      latestByNode[nodeId] = output;
+    }
+  };
+
+  const ensureOutput = (nodeId: string, eventId: string, ts: string): NodeRunOutput & { nodeId: string } => {
+    const key = `${nodeId}:${eventId}`;
+    let output = byEvent.get(key);
+    if (!output) {
+      output = { nodeId, eventId, status: "running", chunks: [], startedAt: ts, updatedAt: ts };
+      byEvent.set(key, output);
+    }
+    return output;
+  };
+
+  for (const entry of entries) {
+    const node = typeof entry.node === "string" ? entry.node : undefined;
+    const eventId = typeof entry.eventId === "string" ? entry.eventId : undefined;
+    if (!node || !eventId || !nodeIds.has(node)) continue;
+
+    if (entry.type === "trigger.fired") {
+      const output = ensureOutput(node, eventId, entry.ts);
+      output.status = "running";
+      output.updatedAt = entry.ts;
+      touchLatest(node, output);
+      continue;
+    }
+    if (entry.type === "session.output") {
+      const output = ensureOutput(node, eventId, entry.ts);
+      if (typeof entry.content === "string") output.chunks.push(entry.content);
+      if (output.status !== "completed" && output.status !== "errored") output.status = "running";
+      output.updatedAt = entry.ts;
+      touchLatest(node, output);
+      continue;
+    }
+    if (entry.type === "session.spawned") {
+      const output = ensureOutput(node, eventId, entry.ts);
+      output.status = "completed";
+      output.updatedAt = entry.ts;
+      touchLatest(node, output);
+      continue;
+    }
+    if (entry.type === "session.errored") {
+      const output = ensureOutput(node, eventId, entry.ts);
+      output.status = "errored";
+      output.error = typeof entry.error === "string" ? entry.error : "Session errored.";
+      output.updatedAt = entry.ts;
+      touchLatest(node, output);
+    }
+  }
+
+  return latestByNode;
 }
 
 function emptyUsage(): TokenUsageSummary {

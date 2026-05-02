@@ -60,6 +60,7 @@ export interface RunWorkflowNodeArgs {
   dryRun?: boolean;
   source?: string;
   spawner?: string;
+  recordOutput?: boolean;
   onMarkdown?: (markdown: string) => void | Promise<void>;
 }
 
@@ -104,7 +105,29 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
   const eventId = ulid();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
+  let outputSequence = 0;
+  let outputBuffer = "";
+  let lastOutputFlushMs = Date.now();
+  const flushOutput = async (force = false): Promise<void> => {
+    if (!args.recordOutput || outputBuffer.length === 0) return;
+    if (!force && outputBuffer.length < 800 && Date.now() - lastOutputFlushMs < 1000) return;
+    const content = outputBuffer;
+    outputBuffer = "";
+    lastOutputFlushMs = Date.now();
+    await deps.ledger.append({
+      type: "session.output",
+      node: node.id,
+      eventId,
+      content,
+      sequence: outputSequence++,
+      detail: { source, spawner }
+    });
+  };
   const emit = async (markdown: string): Promise<void> => {
+    if (args.recordOutput && markdown) {
+      outputBuffer += markdown;
+      await flushOutput(false);
+    }
     await args.onMarkdown?.(markdown);
   };
 
@@ -165,6 +188,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
   const modelSelector = normalizeModelSelector(node.model);
   if (args.dryRun) {
     await emit("`dryRun` is enabled - skipping the model call.");
+    await flushOutput(true);
     await deps.ledger.append({
       type: "session.spawned",
       node: node.id,
@@ -194,6 +218,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
       await emit(fragment);
     }
   } catch (err) {
+    await flushOutput(true);
     const message = err instanceof Error ? err.message : String(err);
     if (inputTokenCount && model) {
       await recordUsage({
@@ -215,6 +240,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
     });
     throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
   }
+  await flushOutput(true);
 
   await deps.ledger.append({
     type: "session.spawned",
@@ -283,6 +309,7 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
       await emit(`  -> \`${handoff.target}\` (id ${payload.id})\n`);
     }
   }
+  await flushOutput(true);
 
   return {
     nodeId: node.id,

@@ -138,7 +138,8 @@ export class Dispatcher {
         userText: formatTriggerTag(ctx),
         dryRun,
         source: "dispatcher",
-        spawner: "extension-host"
+        spawner: "extension-host",
+        recordOutput: true
       });
     } catch (err) {
       await this.handleBackgroundRunError(node, err);
