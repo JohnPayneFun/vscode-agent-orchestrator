@@ -1,6 +1,6 @@
 # vscode-agent-orchestrator
 
-A graph-based orchestrator for multi-agent workflows in VS Code. Define personas as nodes (Sec, PM, Lead Dev, ...), attach triggers (GitHub PR, timer, message-received), connect them with drag-drop edges, and let the **native VS Code chat** drive each step — using whatever model you've picked in the chat dropdown.
+A graph-based orchestrator for multi-agent workflows in VS Code. Define personas as nodes (Sec, PM, Lead Dev, ...), attach triggers (GitHub PR, timer, message-received), connect them with drag-drop edges, and let VS Code's Language Model + tool APIs drive each step. Triggered and graph-editor runs execute independently in the extension host by default; manual `@orchestrator` chat runs still stream in native VS Code Chat.
 
 Model-agnostic by design. Anything VS Code's chat picker can talk to (Copilot's GPT-4o, Claude via your Copilot subscription, Gemini, local models registered as language model providers, ...) just works — there's nothing Claude-specific in the runtime.
 
@@ -53,7 +53,7 @@ In the graph editor:
 
 1. Add a node for each role, such as `PM`, `Lead Dev`, `QA`, or `Security`.
 2. Pick the node's VS Code Agent from the **Agent** dropdown when custom agents are available.
-3. Leave **Model** blank to use the user's native VS Code chat model picker, or choose a model per node.
+3. Choose a model per node when you need predictable background runs. Blank uses the chat picker for manual `@orchestrator` chat runs, or VS Code's first available model for background dispatch.
 4. Set **Thinking effort** if the selected model supports it.
 5. Set **On Trigger** to `Manual`, `New Message`, `Timer`, `Webhook`, or another trigger.
 6. Use `+ OR` under a trigger when a node needs multiple inputs, such as `New Message OR Timer`.
@@ -91,11 +91,11 @@ For MCP-heavy or implementation-heavy flows, especially Monday.com project-manag
 
 If a productive run reaches the tool-round cap, the orchestrator saves the original node run for manual resume. Continue it with `@orchestrator /resume <node label or id>` or the shorthand `@orchestrator <node label or id> resume`. Resume restores the original user text and drained handoffs, then tells the node to inspect current Git/PR/filesystem/MCP state and continue the remaining work rather than starting from scratch.
 
-Nodes should create or update files with the orchestrator's `<<WRITE_FILE path=...>>...<<END_WRITE_FILE>>` block protocol. By default, the orchestrator hides a small blocklist of registered tools that are known to break or loop in this custom participant context, including Copilot file-mutation tools such as `copilot_createFile`, planning/meta tools such as `manage_todo_list`, and nested-agent execution tools such as `execution_subagent`. This is configurable with `vscodeAgentOrchestrator.blockedTools`; set it to `[]` to expose every native tool.
+Nodes should create or update files with the orchestrator's `<<WRITE_FILE path=...>>...<<END_WRITE_FILE>>` block protocol. By default, the orchestrator hides a small blocklist of registered tools that are known to break or loop in this custom participant/background context, including Copilot file-mutation tools such as `copilot_createFile`, planning/meta tools such as `manage_todo_list`, and nested-agent execution tools such as `execution_subagent`. This is configurable with `vscodeAgentOrchestrator.blockedTools`; set it to `[]` to expose every native tool.
 
 If a node hits a usage or rate limit and the error includes text like `Try again in ~63 min`, the orchestrator saves the failed run context, preserves drained handoffs, and schedules a one-shot retry one minute after the reported wait time. In that example, the node retries after 64 minutes. The graph shows this as `Retry scheduled`, and retry state is stored under `.agent-orchestrator/runtime/retries/` until the retry runs.
 
-Scheduled triggers (`timer` and `interval`) also check outgoing graph-edge targets before opening chat. If a Project Manager timer fires while an output node such as Lead Dev is still `running`, the dispatch is skipped with a `downstream-running` guardrail entry and the timer waits for its next tick instead of piling up another task.
+Scheduled triggers (`timer` and `interval`) also check outgoing graph-edge targets before dispatching. If a Project Manager timer fires while an output node such as Lead Dev is still `running`, the dispatch is skipped with a `downstream-running` guardrail entry and the timer waits for its next tick instead of piling up another task.
 
 The graph also records token usage per node run. Inside VS Code, the extension uses the selected model's native `countTokens` API for prompt and response counts; headless/mock runs fall back to a deterministic estimate. Usage appears as a total in the graph toolbar, a workflow total in the side panel, and a per-node total when a node is selected. The raw ledger event is `usage.recorded` with input, output, total, model, and estimated fields.
 
@@ -120,13 +120,15 @@ git status --short --branch
 
 ## How it works
 
-Each node in your graph maps to an invocation of a single chat participant, **`@orchestrator`**. When a trigger fires, the orchestrator opens the native chat panel with the query prefilled:
+Each node in your graph maps to a call into the shared node runner. When a trigger fires, the dispatcher runs that node in the extension host by default. These background runs do not share one chat thread, so multiple nodes can run at once up to the workflow's **Concurrency limit**.
+
+Manual chat remains available through the single chat participant, **`@orchestrator`**:
 
 ```
 @orchestrator /run sec [triggered:ghPr:prNumber=42]
 ```
 
-The participant handler (this extension) reads the node's config from your workflow file, drains pending handoffs from the node's inbox, calls `request.model.sendRequest(...)` using the model you have selected in the chat picker, streams the response back to the chat UI, then parses any `<<HANDOFF target=NODE_ID>>{...}<<END>>` blocks in the response and writes them as JSON files to the target node's inbox — which fires that node's handoff trigger and the chain continues.
+Both paths read the node's config from your workflow file, drain pending handoffs from the node's inbox, call the selected VS Code language model, parse any `<<HANDOFF target=NODE_ID>>{...}<<END>>` blocks in the response, and write JSON handoffs to target inboxes. Background dispatch writes progress to the ledger and graph activity instead of streaming into one chat panel. Set `vscodeAgentOrchestrator.dispatchMode` to `chat` to restore the legacy behavior where triggers open the native chat panel with a prefilled query.
 
 State lives in `.agent-orchestrator/` at the workspace root:
 
@@ -194,7 +196,7 @@ Invoke-RestMethod -Method Post `
 
 ## Per-node model selection
 
-Each node has an optional `model` selector (`vendor` / `family` / `id`) that maps to `vscode.lm.selectChatModels`. Leave it blank and the participant uses whatever the user has selected in the chat dropdown — the most natural workflow.
+Each node has an optional `model` selector (`vendor` / `family` / `id`) that maps to `vscode.lm.selectChatModels`. Leave it blank and manual `@orchestrator` chat runs use whatever the user has selected in the chat dropdown. Background trigger/graph runs do not have access to the chat picker selection, so they use VS Code's first available matching model; choose a model per node when the exact model matters.
 
 Nodes can also set `model.reasoningEffort` to `none`, `low`, `medium`, `high`, or `xhigh`. In VS Code this is passed through as the Copilot-style `reasoningEffort` model option, matching the native Thinking Effort menu when the selected model supports it.
 
@@ -293,7 +295,8 @@ Hooks run from the workspace root. `beforeRun` failures fail the attempt; `after
 | Setting | Default | What |
 |---|---|---|
 | `vscodeAgentOrchestrator.enabled` | `true` | Master kill switch — when false, no triggers fire |
-| `vscodeAgentOrchestrator.dryRun` | `false` | Log dispatch intents but don't open chats |
+| `vscodeAgentOrchestrator.dryRun` | `false` | Log dispatch intents without model calls |
+| `vscodeAgentOrchestrator.dispatchMode` | `background` | Trigger/graph dispatch mode: `background` runs independent extension-host node sessions; `chat` restores the legacy chat-panel path |
 | `vscodeAgentOrchestrator.ghPollSeconds` | `60` | GitHub PR polling interval (min 15) |
 | `vscodeAgentOrchestrator.toolRoundLimit` | `64` | Global maximum model/tool-call rounds per node run (1-200); nodes can override this in their Runtime settings |
 | `vscodeAgentOrchestrator.blockedTools` | Known-problem tools | Native tool names to hide from orchestrated node runs; set to `[]` to expose all tools |

@@ -41709,7 +41709,7 @@
         "Show full context on node"
       ] }) }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("h3", { style: { marginTop: 18 }, children: "Model (optional)" }),
-      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 0 }, children: "Leave blank to use whatever the user picks in the native chat model dropdown." }),
+      /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("p", { style: { fontSize: 11, opacity: 0.7, marginTop: 0 }, children: "Blank uses the chat picker for @orchestrator chat runs, or VS Code's default available model for background dispatch." }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("label", { children: "Model" }),
       /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
         "select",

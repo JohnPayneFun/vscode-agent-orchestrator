@@ -25,7 +25,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const ledger = p ? new Ledger(p.ledgerJsonl) : null;
   const store = p ? new WorkflowStore(p) : null;
   const bus = p ? new MessageBus(p) : null;
-  const dispatcher = ledger && store ? new Dispatcher(ledger, () => store.get()) : null;
+  const dispatcher = ledger && store && p && bus
+    ? new Dispatcher({
+        ledger,
+        paths: p,
+        bus,
+        getWorkflow: () => store.get(),
+        getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null
+      })
+    : null;
   const triggers =
     dispatcher && p && bus ? new TriggerRegistry(dispatcher, p, bus, output) : null;
 

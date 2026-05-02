@@ -8,10 +8,10 @@ This folder is opened by the Extension Development Host launch config. It alread
 2. You'll see three nodes connected by edges:
    - **SecAgent** (trigger: GH PR) → **PMAgent** (trigger: New Message) → **LeadDevAgent** (trigger: Timer · `*/27 * * * *`)
 3. Toggle **View as JSON** to see the same graph as raw JSON. Edits in either view round-trip on save.
-4. **To run a node manually**: click a node in the graph, then **▶ Run selected** in the toolbar — *or* type `@orchestrator /run sec` in the native chat panel (Ctrl+Alt+I).
+4. **To run a node manually**: click a node in the graph, then **▶ Run selected** in the toolbar for a background run — *or* type `@orchestrator /run sec` in the native chat panel (Ctrl+Alt+I) for an interactive chat run.
 
 ## Phase-1 verification (the load-bearing test)
 
-Click the SecAgent node, then click ▶ Run selected. The native VS Code chat panel should open with the prompt `@orchestrator /run sec [triggered:manual]` already filled in. The orchestrator participant streams back a response that uses whatever model you've selected in the native model dropdown.
+Click the SecAgent node, then click ▶ Run selected. The node should run in the extension host and record activity in the graph/ledger without opening the native chat panel. Type `@orchestrator /run sec` in chat when you specifically want an interactive chat-thread run.
 
 Multi-turn chats work: type follow-ups in the same thread; the participant sees `context.history` and continues the conversation.

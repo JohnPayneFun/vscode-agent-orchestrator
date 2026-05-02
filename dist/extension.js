@@ -16621,1037 +16621,17 @@ function normalize(value) {
 }
 
 // src/runtime/dispatcher.ts
-var vscode = __toESM(require("vscode"));
-
-// src/runtime/downstream-state.ts
-function scheduledDispatchDownstreamState(workflow, node, trigger, entries) {
-  if (!isScheduledTrigger(trigger)) return { busy: false, downstream: [] };
-  const targets = workflow.edges.filter((edge) => edge.from === node.id).map((edge) => edge.to);
-  const downstream = targets.map((nodeId) => ({ nodeId, status: latestNodeStatus(entries, nodeId) }));
-  return { busy: downstream.some((target) => target.status === "running"), downstream };
-}
-function isScheduledTrigger(trigger) {
-  return trigger === "timer" || trigger === "interval";
-}
-function latestNodeStatus(entries, nodeId) {
-  let status = "idle";
-  for (const entry of entries) {
-    const node = typeof entry.node === "string" ? entry.node : void 0;
-    const to = typeof entry.to === "string" ? entry.to : void 0;
-    const from = typeof entry.from === "string" ? entry.from : void 0;
-    switch (entry.type) {
-      case "handoff.delivered":
-        if (to === nodeId) status = "queued";
-        break;
-      case "trigger.fired":
-      case "handoff.consumed":
-      case "retry.restored":
-        if (node === nodeId) status = "running";
-        break;
-      case "session.spawned":
-        if (node === nodeId) status = "completed";
-        break;
-      case "session.errored":
-        if (node === nodeId) status = "errored";
-        break;
-      case "guardrail.tripped":
-        if (node === nodeId) status = "blocked";
-        break;
-      case "handoff.emitted":
-        if (from === nodeId) status = "completed";
-        break;
-    }
-  }
-  return status;
-}
-
-// src/runtime/dispatcher.ts
-var CHAT_PARTICIPANT_NAME = "@orchestrator";
-var Dispatcher = class {
-  constructor(ledger, getWorkflow) {
-    this.ledger = ledger;
-    this.getWorkflow = getWorkflow;
-  }
-  inFlight = 0;
-  async fireNode(node, ctx) {
-    const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
-    if (!config.get("enabled", true)) {
-      await this.ledger.append({
-        type: "guardrail.tripped",
-        rule: "globally-disabled",
-        node: node.id,
-        eventId: ctx.rootEventId
-      });
-      return;
-    }
-    const wf = this.getWorkflow();
-    if (wf) {
-      const downstreamState = scheduledDispatchDownstreamState(wf, node, ctx.reason, await this.ledger.tail(1e3));
-      if (downstreamState.busy) {
-        await this.ledger.append({
-          type: "guardrail.tripped",
-          rule: "downstream-running",
-          node: node.id,
-          trigger: ctx.reason,
-          eventId: ctx.rootEventId,
-          detail: {
-            action: "deferred-to-next-tick",
-            downstream: downstreamState.downstream.filter((target) => target.status === "running")
-          }
-        });
-        return;
-      }
-    }
-    if (wf && this.inFlight >= wf.settings.concurrencyLimit) {
-      await this.ledger.append({
-        type: "guardrail.tripped",
-        rule: "concurrencyLimit",
-        node: node.id,
-        limit: wf.settings.concurrencyLimit,
-        eventId: ctx.rootEventId
-      });
-      return;
-    }
-    if (wf) {
-      const today = await this.ledger.countToday("session.spawned");
-      if (today >= wf.settings.dailyHandoffCap) {
-        await this.ledger.append({
-          type: "guardrail.tripped",
-          rule: "dailyHandoffCap",
-          limit: wf.settings.dailyHandoffCap,
-          current: today,
-          action: "halted",
-          eventId: ctx.rootEventId
-        });
-        vscode.window.showWarningMessage(
-          `Agent Orchestrator: daily spawn cap (${wf.settings.dailyHandoffCap}) reached. Edit workflows.json or use Emergency Stop.`
-        );
-        return;
-      }
-    }
-    if (config.get("dryRun", false)) {
-      await this.ledger.append({
-        type: "trigger.fired",
-        node: node.id,
-        trigger: ctx.reason,
-        detail: { ...ctx.triggerDetail, dryRun: true },
-        eventId: ctx.rootEventId
-      });
-      return;
-    }
-    const triggerTag = formatTriggerTag(ctx);
-    const query = `${CHAT_PARTICIPANT_NAME} /run ${node.id} ${triggerTag}`;
-    this.inFlight++;
-    try {
-      await vscode.commands.executeCommand("workbench.action.chat.open", { query });
-    } catch (err) {
-      try {
-        await vscode.commands.executeCommand("workbench.action.chat.open");
-        await vscode.env.clipboard.writeText(query);
-        vscode.window.showInformationMessage(
-          `Agent Orchestrator: trigger fired but the chat command refused a prefilled query. Query was copied to your clipboard \u2014 paste it into the chat input. Underlying error: ${err instanceof Error ? err.message : err}`
-        );
-      } catch {
-        vscode.window.showErrorMessage(
-          `Agent Orchestrator: failed to open chat for ${node.id}. Make sure VS Code's chat view is available.`
-        );
-      }
-    } finally {
-      setTimeout(() => {
-        this.inFlight = Math.max(0, this.inFlight - 1);
-      }, 5e3);
-    }
-  }
-};
-function formatTriggerTag(ctx) {
-  const detailParts = [];
-  if (ctx.triggerDetail) {
-    for (const [k, v] of Object.entries(ctx.triggerDetail)) {
-      if (typeof v === "string" || typeof v === "number") detailParts.push(`${k}=${v}`);
-    }
-  }
-  const detail = detailParts.length > 0 ? `:${detailParts.join(",")}` : "";
-  return `[triggered:${ctx.reason}${detail}]`;
-}
-
-// src/runtime/triggers/timer-trigger.ts
-var import_cron_parser = __toESM(require_parser());
-var TimerTrigger = class {
-  constructor(node, cfg, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  timeout = null;
-  disposed = false;
-  start() {
-    this.scheduleNext();
-  }
-  dispose() {
-    this.disposed = true;
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
-  }
-  scheduleNext() {
-    if (this.disposed) return;
-    let nextMs;
-    try {
-      const interval = import_cron_parser.default.parseExpression(this.cfg.cron, {
-        tz: this.cfg.tz === "utc" ? "UTC" : void 0
-      });
-      const next = interval.next().toDate();
-      nextMs = Math.max(1e3, next.getTime() - Date.now());
-    } catch (err) {
-      this.deps.log(
-        `Timer trigger for node ${this.node.id}: invalid cron "${this.cfg.cron}" (${err instanceof Error ? err.message : err}). Will retry in 5 min.`,
-        "error"
-      );
-      nextMs = 5 * 60 * 1e3;
-    }
-    this.timeout = setTimeout(async () => {
-      if (this.disposed) return;
-      try {
-        await this.deps.fire(this.node, { cron: this.cfg.cron });
-      } catch (err) {
-        this.deps.log(
-          `Timer trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-          "error"
-        );
-      } finally {
-        this.scheduleNext();
-      }
-    }, nextMs);
-  }
-};
-
-// shared/schedule.ts
-var import_cron_parser2 = __toESM(require_parser());
-var UNIT_MS = {
-  seconds: 1e3,
-  minutes: 6e4,
-  hours: 36e5,
-  days: 864e5
-};
-function intervalToMs(cfg) {
-  const every = Math.max(1, Math.floor(cfg.every));
-  return every * UNIT_MS[cfg.unit];
-}
-function nextIntervalDelayMs(cfg, nowMs = Date.now()) {
-  const intervalMs = intervalToMs(cfg);
-  if (!Number.isFinite(intervalMs) || intervalMs <= 0) return null;
-  const elapsedMs = nowMs % intervalMs;
-  return elapsedMs === 0 ? intervalMs : intervalMs - elapsedMs;
-}
-
-// src/runtime/triggers/interval-trigger.ts
-var IntervalTrigger = class {
-  constructor(node, cfg, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  timeout = null;
-  disposed = false;
-  start() {
-    const intervalMs = intervalToMs(this.cfg);
-    if (this.cfg.runOnStart) {
-      void this.fire(intervalMs);
-    }
-    this.scheduleNext(intervalMs);
-  }
-  dispose() {
-    this.disposed = true;
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
-  }
-  scheduleNext(intervalMs) {
-    if (this.disposed) return;
-    const nextMs = nextIntervalDelayMs(this.cfg) ?? intervalMs;
-    this.timeout = setTimeout(async () => {
-      await this.fire(intervalMs);
-      this.scheduleNext(intervalMs);
-    }, Math.max(1e3, nextMs));
-  }
-  async fire(intervalMs) {
-    if (this.disposed) return;
-    try {
-      await this.deps.fire(this.node, {
-        every: this.cfg.every,
-        unit: this.cfg.unit,
-        intervalMs,
-        runOnStart: this.cfg.runOnStart ? 1 : 0
-      });
-    } catch (err) {
-      this.deps.log(
-        `Interval trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-        "error"
-      );
-    }
-  }
-};
-
-// src/runtime/triggers/handoff-trigger.ts
-var vscode2 = __toESM(require("vscode"));
-var path6 = __toESM(require("path"));
-var fs6 = __toESM(require("fs"));
-var HandoffTrigger = class {
-  constructor(node, p, deps) {
-    this.node = node;
-    this.p = p;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  watcher = null;
-  debounceTimer = null;
-  pendingFiles = /* @__PURE__ */ new Set();
-  start() {
-    const dir = inboxDir(this.p, this.node.id);
-    fs6.mkdirSync(dir, { recursive: true });
-    const pattern = new vscode2.RelativePattern(vscode2.Uri.file(dir), "*.json");
-    this.watcher = vscode2.workspace.createFileSystemWatcher(pattern, false, true, true);
-    this.watcher.onDidCreate((uri) => this.onFile(uri.fsPath));
-    for (const fileName of fs6.readdirSync(dir)) {
-      if (fileName.endsWith(".json")) this.onFile(path6.join(dir, fileName));
-    }
-  }
-  dispose() {
-    if (this.watcher) {
-      this.watcher.dispose();
-      this.watcher = null;
-    }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    this.pendingFiles.clear();
-  }
-  onFile(filePath) {
-    this.pendingFiles.add(path6.basename(filePath));
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => {
-      const count = this.pendingFiles.size;
-      this.pendingFiles.clear();
-      this.deps.fire(this.node, { handoffFiles: count }).catch((err) => {
-        this.deps.log(
-          `Handoff trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-          "error"
-        );
-      });
-    }, 500);
-  }
-};
-
-// src/runtime/triggers/gh-pr-trigger.ts
 var vscode3 = __toESM(require("vscode"));
-var fs7 = __toESM(require("fs"));
-var path7 = __toESM(require("path"));
-var import_child_process2 = require("child_process");
-var import_util2 = require("util");
-
-// src/runtime/triggers/gh-pr-events.ts
-function detectGhPrEvents(prs, perNode, configuredEvents, branchFilter = null) {
-  const seen = normalizeSeen(perNode.seen);
-  const highWatermark = perNode.highestSeenPrNumber ?? highestSeenPrNumber(seen);
-  const isFirstPoll = !perNode.lastPolledAt && perNode.highestSeenPrNumber === void 0 && Object.keys(seen).length === 0;
-  const events = [];
-  let nextHighWatermark = highWatermark;
-  for (const pr of [...prs].sort((left, right) => left.number - right.number)) {
-    if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
-    const previous = seen[String(pr.number)];
-    const eventKind = isFirstPoll ? null : inferPrEventKind(pr, previous, highWatermark, configuredEvents);
-    if (eventKind && configuredEvents.includes(eventKind)) {
-      events.push({ pr, eventKind });
-    }
-    seen[String(pr.number)] = { headRefOid: pr.headRefOid, state: normalizePrState(pr.state) };
-    if (nextHighWatermark === void 0 || pr.number > nextHighWatermark) nextHighWatermark = pr.number;
-  }
-  return {
-    events,
-    nextState: {
-      ...perNode,
-      seen,
-      highestSeenPrNumber: nextHighWatermark
-    }
-  };
-}
-function normalizeSeen(seen) {
-  const normalized = {};
-  for (const [number, value] of Object.entries(seen)) {
-    normalized[number] = typeof value === "string" ? { headRefOid: value, state: "OPEN" } : value;
-  }
-  return normalized;
-}
-function inferPrEventKind(pr, previous, highWatermark, configuredEvents) {
-  const currentState = normalizePrState(pr.state);
-  if (!previous) {
-    if (highWatermark !== void 0 && pr.number <= highWatermark) return null;
-    if (closedPrState(currentState) && configuredEvents.includes("closed")) return "closed";
-    return "opened";
-  }
-  const previousState = normalizePrState(previous.state);
-  if (!closedPrState(previousState) && closedPrState(currentState)) return "closed";
-  if (closedPrState(previousState) && currentState === "OPEN") return "reopened";
-  if (currentState === "OPEN" && previous.headRefOid !== pr.headRefOid) return "synchronize";
-  return null;
-}
-function highestSeenPrNumber(seen) {
-  const numbers = Object.keys(seen).map((value) => Number(value)).filter(Number.isFinite);
-  return numbers.length > 0 ? Math.max(...numbers) : void 0;
-}
-function normalizePrState(state) {
-  return state.trim().toUpperCase();
-}
-function closedPrState(state) {
-  return state === "CLOSED" || state === "MERGED";
-}
-
-// src/runtime/triggers/gh-pr-trigger.ts
-var exec2 = (0, import_util2.promisify)(import_child_process2.execFile);
-var GhPrTrigger = class {
-  constructor(node, cfg, p, bus, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.p = p;
-    this.bus = bus;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  interval = null;
-  disposed = false;
-  start() {
-    const cfg = vscode3.workspace.getConfiguration("vscodeAgentOrchestrator");
-    const seconds = Math.max(15, cfg.get("ghPollSeconds", 60));
-    void this.poll();
-    this.interval = setInterval(() => void this.poll(), seconds * 1e3);
-  }
-  dispose() {
-    this.disposed = true;
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
-  }
-  async poll() {
-    if (this.disposed) return;
-    let prs;
-    try {
-      const { stdout } = await exec2(
-        "gh",
-        [
-          "pr",
-          "list",
-          "--repo",
-          this.cfg.repo,
-          "--state",
-          "all",
-          "--json",
-          "number,headRefOid,state,title,url,baseRefName,headRefName,closedAt,mergedAt",
-          "--limit",
-          "100"
-        ],
-        { timeout: 3e4 }
-      );
-      prs = JSON.parse(stdout);
-    } catch (err) {
-      this.deps.log(
-        `gh pr list failed for ${this.cfg.repo}: ${err instanceof Error ? err.message : err}. Is gh installed and authenticated?`,
-        "warn"
-      );
-      return;
-    }
-    const state = await loadState(this.p);
-    const perNode = state.perNode[this.node.id] ?? { seen: {} };
-    let branchFilter = null;
-    if (this.cfg.branchFilter) {
-      try {
-        branchFilter = new RegExp(this.cfg.branchFilter);
-      } catch (err) {
-        this.deps.log(
-          `Invalid branchFilter for ${this.cfg.repo} on node ${this.node.id}: ${err instanceof Error ? err.message : err}`,
-          "warn"
-        );
-      }
-    }
-    const detected = detectGhPrEvents(prs, perNode, this.cfg.events, branchFilter);
-    for (const event of detected.events) {
-      const pr = event.pr;
-      const payload = this.bus.buildPayload({
-        from: "external",
-        to: this.node.id,
-        edgeId: null,
-        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo, eventKind: event.eventKind },
-        payload: {
-          prNumber: pr.number,
-          prUrl: pr.url,
-          title: pr.title,
-          baseRef: pr.baseRefName,
-          headRef: pr.headRefName,
-          headSha: pr.headRefOid,
-          state: pr.state,
-          closedAt: pr.closedAt ?? null,
-          mergedAt: pr.mergedAt ?? null,
-          eventKind: event.eventKind
-        }
-      });
-      await this.bus.deliver(payload);
-      this.deps.fire(this.node, {
-        prNumber: pr.number,
-        repo: this.cfg.repo,
-        headSha: pr.headRefOid,
-        state: pr.state,
-        eventKind: event.eventKind
-      }).catch((err) => {
-        this.deps.log(`gh-pr fire threw: ${err instanceof Error ? err.message : err}`, "error");
-      });
-    }
-    detected.nextState.lastPolledAt = (/* @__PURE__ */ new Date()).toISOString();
-    state.perNode[this.node.id] = detected.nextState;
-    await saveState(this.p, state);
-  }
-};
-async function loadState(p) {
-  if (!fs7.existsSync(p.triggersStateJson)) return { perNode: {} };
-  try {
-    return JSON.parse(await fs7.promises.readFile(p.triggersStateJson, "utf8"));
-  } catch {
-    return { perNode: {} };
-  }
-}
-async function saveState(p, state) {
-  await fs7.promises.mkdir(path7.dirname(p.triggersStateJson), { recursive: true });
-  await fs7.promises.writeFile(p.triggersStateJson, JSON.stringify(state, null, 2), "utf8");
-}
-
-// src/runtime/triggers/file-change-trigger.ts
-var path8 = __toESM(require("path"));
-var vscode4 = __toESM(require("vscode"));
-var FileChangeTrigger = class {
-  constructor(node, cfg, p, bus, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.p = p;
-    this.bus = bus;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  watcher = null;
-  debounceTimer = null;
-  pendingFiles = /* @__PURE__ */ new Map();
-  start() {
-    const pattern = new vscode4.RelativePattern(vscode4.Uri.file(this.p.workspaceRoot), this.cfg.glob);
-    this.watcher = vscode4.workspace.createFileSystemWatcher(pattern, false, false, false);
-    this.watcher.onDidCreate((uri) => this.onFile("created", uri));
-    this.watcher.onDidChange((uri) => this.onFile("changed", uri));
-    this.watcher.onDidDelete((uri) => this.onFile("deleted", uri));
-  }
-  dispose() {
-    if (this.watcher) {
-      this.watcher.dispose();
-      this.watcher = null;
-    }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    this.pendingFiles.clear();
-  }
-  onFile(event, uri) {
-    const relativePath = path8.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
-    this.pendingFiles.set(relativePath, { path: relativePath, event });
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => void this.flush(), 500);
-  }
-  async flush() {
-    const files = Array.from(this.pendingFiles.values());
-    this.pendingFiles.clear();
-    if (files.length === 0) return;
-    try {
-      const payload = this.bus.buildPayload({
-        from: "external",
-        to: this.node.id,
-        edgeId: null,
-        trigger: { type: "fileChange", glob: this.cfg.glob, fileCount: files.length },
-        payload: { glob: this.cfg.glob, files }
-      });
-      await this.bus.deliver(payload);
-      await this.deps.fire(this.node, { glob: this.cfg.glob, fileCount: files.length });
-    } catch (err) {
-      this.deps.log(
-        `File change trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-        "error"
-      );
-    }
-  }
-};
-
-// src/runtime/triggers/startup-trigger.ts
-var StartupTrigger = class {
-  constructor(node, cfg, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  timeout = null;
-  disposed = false;
-  start() {
-    const delayMs = Math.max(0, this.cfg.delaySeconds ?? 3) * 1e3;
-    this.timeout = setTimeout(() => {
-      if (this.disposed) return;
-      this.deps.fire(this.node, { delaySeconds: this.cfg.delaySeconds ?? 3 }).catch((err) => {
-        this.deps.log(
-          `Startup trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-          "error"
-        );
-      });
-    }, delayMs);
-  }
-  dispose() {
-    this.disposed = true;
-    if (this.timeout) {
-      clearTimeout(this.timeout);
-      this.timeout = null;
-    }
-  }
-};
-
-// src/runtime/triggers/diagnostics-trigger.ts
-var path9 = __toESM(require("path"));
-var vscode5 = __toESM(require("vscode"));
-var DiagnosticsTrigger = class {
-  constructor(node, cfg, p, bus, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.p = p;
-    this.bus = bus;
-    this.deps = deps;
-    this.nodeId = node.id;
-    this.globPattern = compileGlob(cfg.glob);
-  }
-  nodeId;
-  disposable = null;
-  debounceTimer = null;
-  pendingUris = /* @__PURE__ */ new Map();
-  globPattern;
-  start() {
-    this.disposable = vscode5.languages.onDidChangeDiagnostics((event) => {
-      this.queue(event.uris);
-    });
-  }
-  dispose() {
-    if (this.disposable) {
-      this.disposable.dispose();
-      this.disposable = null;
-    }
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
-    }
-    this.pendingUris.clear();
-  }
-  queue(uris) {
-    for (const uri of uris) {
-      if (uri.scheme !== "file") continue;
-      const relativePath = path9.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
-      if (relativePath.startsWith("..") || path9.isAbsolute(relativePath)) continue;
-      if (!this.globPattern.test(relativePath)) continue;
-      this.pendingUris.set(uri.fsPath, uri);
-    }
-    if (this.pendingUris.size === 0) return;
-    if (this.debounceTimer) clearTimeout(this.debounceTimer);
-    this.debounceTimer = setTimeout(() => void this.flush(), this.cfg.debounceMs ?? 1e3);
-  }
-  async flush() {
-    const uris = Array.from(this.pendingUris.values());
-    this.pendingUris.clear();
-    const files = uris.map((uri) => ({ uri, path: path9.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/") })).map(({ uri, path: relativePath }) => ({
-      path: relativePath,
-      diagnostics: vscode5.languages.getDiagnostics(uri).filter((diagnostic) => severityMatches(diagnostic.severity, this.cfg.severity)).slice(0, 20).map((diagnostic) => ({
-        severity: severityLabel(diagnostic.severity),
-        message: diagnostic.message,
-        source: diagnostic.source,
-        code: typeof diagnostic.code === "object" ? String(diagnostic.code.value) : diagnostic.code,
-        range: {
-          startLine: diagnostic.range.start.line + 1,
-          startCharacter: diagnostic.range.start.character + 1,
-          endLine: diagnostic.range.end.line + 1,
-          endCharacter: diagnostic.range.end.character + 1
-        }
-      }))
-    })).filter((file) => file.diagnostics.length > 0).slice(0, 25);
-    const diagnosticCount = files.reduce((total, file) => total + file.diagnostics.length, 0);
-    if (diagnosticCount === 0) return;
-    try {
-      const payload = this.bus.buildPayload({
-        from: "external",
-        to: this.node.id,
-        edgeId: null,
-        trigger: {
-          type: "diagnostics",
-          glob: this.cfg.glob,
-          severity: this.cfg.severity,
-          fileCount: files.length,
-          diagnosticCount
-        },
-        payload: { glob: this.cfg.glob, severity: this.cfg.severity, files }
-      });
-      await this.bus.deliver(payload);
-      await this.deps.fire(this.node, { fileCount: files.length, diagnosticCount, severity: this.cfg.severity });
-    } catch (err) {
-      this.deps.log(
-        `Diagnostics trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
-        "error"
-      );
-    }
-  }
-};
-function severityMatches(actual, configured) {
-  if (configured === "any") return true;
-  return severityLabel(actual) === configured;
-}
-function severityLabel(severity) {
-  switch (severity) {
-    case vscode5.DiagnosticSeverity.Error:
-      return "error";
-    case vscode5.DiagnosticSeverity.Warning:
-      return "warning";
-    case vscode5.DiagnosticSeverity.Information:
-      return "info";
-    case vscode5.DiagnosticSeverity.Hint:
-    default:
-      return "hint";
-  }
-}
-function compileGlob(glob) {
-  const normalized = glob.trim().replace(/\\/g, "/") || "**/*";
-  let pattern = "^";
-  for (let index = 0; index < normalized.length; index++) {
-    const char = normalized[index];
-    const next = normalized[index + 1];
-    const afterNext = normalized[index + 2];
-    if (char === "*" && next === "*" && afterNext === "/") {
-      pattern += "(?:.*/)?";
-      index += 2;
-    } else if (char === "*" && next === "*") {
-      pattern += ".*";
-      index += 1;
-    } else if (char === "*") {
-      pattern += "[^/]*";
-    } else if (char === "?") {
-      pattern += "[^/]";
-    } else {
-      pattern += escapeRegExp2(char);
-    }
-  }
-  return new RegExp(`${pattern}$`, "i");
-}
-function escapeRegExp2(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// src/runtime/triggers/webhook-trigger.ts
-var http = __toESM(require("http"));
-var DEFAULT_WEBHOOK_PORT = 8787;
-var DEFAULT_SECRET_HEADER = "x-agent-orchestrator-secret";
-var MAX_BODY_BYTES = 1e6;
-var WebhookTrigger = class {
-  constructor(node, cfg, p, bus, deps) {
-    this.node = node;
-    this.cfg = cfg;
-    this.p = p;
-    this.bus = bus;
-    this.deps = deps;
-    this.nodeId = node.id;
-  }
-  nodeId;
-  unregister = null;
-  start() {
-    try {
-      this.unregister = WebhookServerRegistry.register({
-        node: this.node,
-        cfg: this.cfg,
-        p: this.p,
-        bus: this.bus,
-        deps: this.deps
-      });
-      const port = this.cfg.port ?? DEFAULT_WEBHOOK_PORT;
-      this.deps.log(`Webhook trigger for node ${this.node.id} listening on http://127.0.0.1:${port}${normalizeWebhookPath(this.cfg.path)}`);
-    } catch (err) {
-      this.deps.log(
-        `Webhook trigger for node ${this.node.id} failed to start: ${err instanceof Error ? err.message : err}`,
-        "error"
-      );
-    }
-  }
-  dispose() {
-    this.unregister?.();
-    this.unregister = null;
-  }
-};
-var WebhookServerRegistry = class {
-  static servers = /* @__PURE__ */ new Map();
-  static register(registration) {
-    const port = registration.cfg.port ?? DEFAULT_WEBHOOK_PORT;
-    let server = this.servers.get(port);
-    if (!server) {
-      server = new WebhookServer(port);
-      this.servers.set(port, server);
-    }
-    return server.register(registration, () => {
-      if (server && server.routeCount === 0) {
-        server.close();
-        this.servers.delete(port);
-      }
-    });
-  }
-};
-var WebhookServer = class {
-  constructor(port) {
-    this.port = port;
-    this.server = http.createServer((request, response) => {
-      void this.handle(request, response);
-    });
-    this.server.listen(port, "127.0.0.1");
-  }
-  server;
-  routes = /* @__PURE__ */ new Map();
-  get routeCount() {
-    return this.routes.size;
-  }
-  register(registration, onEmpty) {
-    const routePath = normalizeWebhookPath(registration.cfg.path);
-    const existing = this.routes.get(routePath);
-    if (existing && existing.node.id !== registration.node.id) {
-      throw new Error(`Webhook path ${routePath} is already registered on port ${this.port}.`);
-    }
-    this.routes.set(routePath, registration);
-    return () => {
-      const current = this.routes.get(routePath);
-      if (current?.node.id === registration.node.id) this.routes.delete(routePath);
-      onEmpty();
-    };
-  }
-  close() {
-    this.server.close();
-  }
-  async handle(request, response) {
-    const url = new URL(request.url ?? "/", `http://127.0.0.1:${this.port}`);
-    const route = this.routes.get(normalizeWebhookPath(url.pathname));
-    if (!route) {
-      writeJson(response, 404, { ok: false, error: "No webhook route registered for this path." });
-      return;
-    }
-    if ((request.method ?? "GET").toUpperCase() !== "POST") {
-      writeJson(response, 405, { ok: false, error: "Webhook triggers accept POST requests only." });
-      return;
-    }
-    const auth = validateSecret(route.cfg, request.headers);
-    if (!auth.ok) {
-      writeJson(response, auth.status, { ok: false, error: auth.error });
-      return;
-    }
-    let body;
-    try {
-      body = await readRequestBody(request);
-    } catch (err) {
-      writeJson(response, 400, { ok: false, error: err instanceof Error ? err.message : String(err) });
-      return;
-    }
-    const payload = buildWebhookPayload({ request, url, body });
-    try {
-      const handoff = route.bus.buildPayload({
-        from: "external",
-        to: route.node.id,
-        edgeId: null,
-        trigger: { type: "webhook", path: route.cfg.path, port: route.cfg.port ?? DEFAULT_WEBHOOK_PORT },
-        payload
-      });
-      await route.bus.deliver(handoff);
-      await route.deps.fire(route.node, { path: payload.path, method: payload.method });
-      writeJson(response, 202, { ok: true, nodeId: route.node.id, handoffId: handoff.id });
-    } catch (err) {
-      route.deps.log(
-        `Webhook trigger fire for node ${route.node.id} threw: ${err instanceof Error ? err.message : err}`,
-        "error"
-      );
-      writeJson(response, 500, { ok: false, error: "Webhook trigger failed." });
-    }
-  }
-};
-function normalizeWebhookPath(value) {
-  const trimmed = value.trim();
-  if (!trimmed) return "/webhook";
-  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-}
-function buildWebhookPayload(args) {
-  return {
-    method: (args.request.method ?? "POST").toUpperCase(),
-    path: normalizeWebhookPath(args.url.pathname),
-    query: queryToRecord(args.url.searchParams),
-    headers: headersToRecord(args.request.headers),
-    body: args.body,
-    receivedAt: args.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString()
-  };
-}
-async function readRequestBody(request) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > MAX_BODY_BYTES) throw new Error("Webhook body is too large.");
-    chunks.push(buffer);
-  }
-  const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw.trim()) return null;
-  const contentType = headerValue(request.headers["content-type"]);
-  if (contentType.includes("application/json")) {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      throw new Error("Webhook body is not valid JSON.");
-    }
-  }
-  return raw;
-}
-function validateSecret(cfg, headers) {
-  if (!cfg.secretEnv) return { ok: true };
-  const expected = process.env[cfg.secretEnv];
-  if (!expected) {
-    return { ok: false, status: 500, error: `Webhook secret environment variable ${cfg.secretEnv} is not set.` };
-  }
-  const headerName = (cfg.secretHeader || DEFAULT_SECRET_HEADER).toLocaleLowerCase();
-  const actual = headerValue(headers[headerName]);
-  if (actual !== expected) return { ok: false, status: 401, error: "Webhook secret did not match." };
-  return { ok: true };
-}
-function queryToRecord(searchParams) {
-  const out = {};
-  for (const key of new Set(searchParams.keys())) {
-    const values = searchParams.getAll(key);
-    out[key] = values.length === 1 ? values[0] : values;
-  }
-  return out;
-}
-function headersToRecord(headers) {
-  const out = {};
-  for (const [key, value] of Object.entries(headers)) {
-    out[key] = headerValue(value);
-  }
-  return out;
-}
-function headerValue(value) {
-  if (Array.isArray(value)) return value.join(", ");
-  return value ?? "";
-}
-function writeJson(response, status, body) {
-  response.writeHead(status, { "Content-Type": "application/json" });
-  response.end(JSON.stringify(body));
-}
-
-// src/runtime/trigger-registry.ts
-var TriggerRegistry = class {
-  constructor(dispatcher, p, bus, output) {
-    this.dispatcher = dispatcher;
-    this.p = p;
-    this.bus = bus;
-    this.output = output;
-  }
-  active = /* @__PURE__ */ new Map();
-  reconcile(workflow) {
-    const desired = /* @__PURE__ */ new Set();
-    if (workflow) {
-      for (const node of workflow.nodes) {
-        if (!node.enabled) continue;
-        for (const spec of this.triggerSpecs(node)) {
-          if (spec.trigger.type === "manual") continue;
-          desired.add(spec.key);
-          if (this.active.has(spec.key)) continue;
-          const trigger = this.create(node, spec.trigger);
-          if (trigger) {
-            trigger.start();
-            this.active.set(spec.key, trigger);
-            this.output.appendLine(`[trigger] started ${spec.trigger.type} for ${node.id}`);
-          }
-        }
-      }
-    }
-    for (const [key, trigger] of this.active) {
-      if (!desired.has(key)) {
-        trigger.dispose();
-        this.active.delete(key);
-        this.output.appendLine(`[trigger] stopped ${key}`);
-      }
-    }
-  }
-  disposeAll() {
-    for (const t of this.active.values()) t.dispose();
-    this.active.clear();
-  }
-  triggerSpecs(node) {
-    if (node.trigger.type !== "any") {
-      return [{ key: `${node.id}:${node.trigger.type}:${JSON.stringify(node.trigger)}`, trigger: node.trigger }];
-    }
-    return node.trigger.triggers.map((trigger, index) => ({
-      key: `${node.id}:any:${index}:${trigger.type}:${JSON.stringify(trigger)}`,
-      trigger
-    }));
-  }
-  create(node, triggerConfig) {
-    const deps = {
-      fire: async (n, detail) => {
-        const ctx = { reason: triggerConfig.type, triggerDetail: detail };
-        await this.dispatcher.fireNode(n, ctx);
-      },
-      log: (msg, level = "info") => {
-        this.output.appendLine(`[${level}] ${msg}`);
-      }
-    };
-    switch (triggerConfig.type) {
-      case "timer":
-        return new TimerTrigger(node, triggerConfig, deps);
-      case "interval":
-        return new IntervalTrigger(node, triggerConfig, deps);
-      case "handoff":
-        return new HandoffTrigger(node, this.p, deps);
-      case "ghPr":
-        return new GhPrTrigger(node, triggerConfig, this.p, this.bus, deps);
-      case "fileChange":
-        return new FileChangeTrigger(node, triggerConfig, this.p, this.bus, deps);
-      case "startup":
-        return new StartupTrigger(node, triggerConfig, deps);
-      case "diagnostics":
-        return new DiagnosticsTrigger(node, triggerConfig, this.p, this.bus, deps);
-      case "webhook":
-        return new WebhookTrigger(node, triggerConfig, this.p, this.bus, deps);
-      case "manual":
-      default:
-        return null;
-    }
-  }
-};
 
 // src/runtime/chat-participant.ts
-var vscode7 = __toESM(require("vscode"));
+var vscode2 = __toESM(require("vscode"));
 
 // src/runtime/node-runner.ts
 var import_ulid3 = __toESM(require_index_umd());
 
 // src/runtime/file-artifacts.ts
-var fs8 = __toESM(require("fs"));
-var path10 = __toESM(require("path"));
+var fs6 = __toESM(require("fs"));
+var path6 = __toESM(require("path"));
 var WRITE_FILE_BLOCK_RE = /<<WRITE_FILE\s+path=(?:"([^"]+)"|'([^']+)'|([^\s>]+))\s*>>([\s\S]*?)<<END_WRITE_FILE>>/g;
 async function writeNodeFileArtifacts(args) {
   const writeBlocks = parseWriteFileBlocks(args.assistantText);
@@ -17659,8 +16639,8 @@ async function writeNodeFileArtifacts(args) {
     const results = [];
     for (const block of writeBlocks) {
       const targetPath2 = resolveTargetPath(block.path, args.workspaceRoot);
-      await fs8.promises.mkdir(path10.dirname(targetPath2), { recursive: true });
-      await fs8.promises.writeFile(targetPath2, block.content, "utf8");
+      await fs6.promises.mkdir(path6.dirname(targetPath2), { recursive: true });
+      await fs6.promises.writeFile(targetPath2, block.content, "utf8");
       results.push({ path: targetPath2, bytes: Buffer.byteLength(block.content, "utf8"), mode: "write", source: "writeBlock" });
     }
     return results;
@@ -17668,12 +16648,12 @@ async function writeNodeFileArtifacts(args) {
   if (!shouldWriteMarkdownFallback(args.node, args.drained)) return [];
   const targetPath = resolveMarkdownFallbackPath(args.node, args.workspaceRoot);
   const entry = buildMarkdownFallbackEntry(args.node, args.drained);
-  await fs8.promises.mkdir(path10.dirname(targetPath), { recursive: true });
-  const exists = fs8.existsSync(targetPath);
+  await fs6.promises.mkdir(path6.dirname(targetPath), { recursive: true });
+  const exists = fs6.existsSync(targetPath);
   const content = `${exists ? "\n\n---\n\n" : `# ${args.node.label} Handoff Log
 
 `}${entry}`;
-  await fs8.promises.appendFile(targetPath, content, "utf8");
+  await fs6.promises.appendFile(targetPath, content, "utf8");
   return [{ path: targetPath, bytes: Buffer.byteLength(content, "utf8"), mode: "append", source: "markdownFallback" }];
 }
 function parseWriteFileBlocks(text) {
@@ -17694,10 +16674,10 @@ function shouldWriteMarkdownFallback(node, drained) {
 }
 function resolveMarkdownFallbackPath(node, workspaceRoot2) {
   const target = extractSaveTarget(node.context);
-  if (!target) return path10.join(workspaceRoot2, `${slug(node.label)}-handoff-log.md`);
+  if (!target) return path6.join(workspaceRoot2, `${slug(node.label)}-handoff-log.md`);
   const resolved = resolveTargetPath(target, workspaceRoot2);
-  if (path10.extname(resolved).toLocaleLowerCase() === ".md") return resolved;
-  return path10.join(resolved, `${slug(node.label)}-handoff-log.md`);
+  if (path6.extname(resolved).toLocaleLowerCase() === ".md") return resolved;
+  return path6.join(resolved, `${slug(node.label)}-handoff-log.md`);
 }
 function extractSaveTarget(context) {
   const matches = Array.from(context.matchAll(/\bto\s+(.+?)(?=(?:[.;]\s+\b(?:save|write|create)\b)|$)/gim));
@@ -17713,7 +16693,7 @@ function cleanTarget(value) {
 }
 function resolveTargetPath(requestedPath, workspaceRoot2) {
   const cleaned = cleanTarget(requestedPath);
-  return path10.isAbsolute(cleaned) ? path10.normalize(cleaned) : path10.resolve(workspaceRoot2, cleaned);
+  return path6.isAbsolute(cleaned) ? path6.normalize(cleaned) : path6.resolve(workspaceRoot2, cleaned);
 }
 function buildMarkdownFallbackEntry(node, drained) {
   const lines = [];
@@ -17750,8 +16730,8 @@ function slug(value) {
 }
 
 // src/runtime/retry-state.ts
-var fs9 = __toESM(require("fs"));
-var path11 = __toESM(require("path"));
+var fs7 = __toESM(require("fs"));
+var path7 = __toESM(require("path"));
 var import_ulid2 = __toESM(require_index_umd());
 async function saveRetryState(p, state) {
   const retryState = {
@@ -17760,15 +16740,15 @@ async function saveRetryState(p, state) {
     createdAt: (/* @__PURE__ */ new Date()).toISOString(),
     ...state
   };
-  await fs9.promises.mkdir(p.retriesRoot, { recursive: true });
-  await fs9.promises.writeFile(retryStatePath(p, retryState.id), JSON.stringify(retryState, null, 2), "utf8");
+  await fs7.promises.mkdir(p.retriesRoot, { recursive: true });
+  await fs7.promises.writeFile(retryStatePath(p, retryState.id), JSON.stringify(retryState, null, 2), "utf8");
   return retryState;
 }
 async function takeRetryState(p, id) {
   const fullPath = retryStatePath(p, id);
   try {
-    const raw = await fs9.promises.readFile(fullPath, "utf8");
-    await fs9.promises.unlink(fullPath).catch(() => void 0);
+    const raw = await fs7.promises.readFile(fullPath, "utf8");
+    await fs7.promises.unlink(fullPath).catch(() => void 0);
     return JSON.parse(raw);
   } catch {
     return null;
@@ -17784,11 +16764,11 @@ async function takeLatestRetryStateForNode(p, nodeId, retryKind) {
 }
 async function listRetryStates(p) {
   try {
-    const files = (await fs9.promises.readdir(p.retriesRoot)).filter((file) => file.endsWith(".json")).sort();
+    const files = (await fs7.promises.readdir(p.retriesRoot)).filter((file) => file.endsWith(".json")).sort();
     const states = [];
     for (const file of files) {
       try {
-        const raw = await fs9.promises.readFile(path11.join(p.retriesRoot, file), "utf8");
+        const raw = await fs7.promises.readFile(path7.join(p.retriesRoot, file), "utf8");
         states.push(JSON.parse(raw));
       } catch {
       }
@@ -17799,7 +16779,7 @@ async function listRetryStates(p) {
   }
 }
 function retryStatePath(p, id) {
-  return path11.join(p.retriesRoot, `${id}.json`);
+  return path7.join(p.retriesRoot, `${id}.json`);
 }
 
 // src/runtime/token-usage.ts
@@ -18267,10 +17247,10 @@ function findEdgeId(workflow, from, to) {
 }
 
 // src/runtime/retry-chat.ts
-var vscode6 = __toESM(require("vscode"));
-var CHAT_PARTICIPANT_NAME2 = "@orchestrator";
+var vscode = __toESM(require("vscode"));
+var CHAT_PARTICIPANT_NAME = "@orchestrator";
 function retryQuery(nodeId, retryId) {
-  return `${CHAT_PARTICIPANT_NAME2} /run ${nodeId} [triggered:manual:retryId=${retryId},usageLimitRetry=1]`;
+  return `${CHAT_PARTICIPANT_NAME} /run ${nodeId} [triggered:manual:retryId=${retryId},usageLimitRetry=1]`;
 }
 function scheduleRetryChat(context, query, delayMs) {
   const timeout = setTimeout(() => {
@@ -18280,17 +17260,17 @@ function scheduleRetryChat(context, query, delayMs) {
 }
 async function openRetryChat(query) {
   try {
-    await vscode6.commands.executeCommand("workbench.action.chat.open", { query });
+    await vscode.commands.executeCommand("workbench.action.chat.open", { query });
   } catch {
     try {
-      await vscode6.commands.executeCommand("workbench.action.chat.open");
+      await vscode.commands.executeCommand("workbench.action.chat.open");
     } catch {
     }
     try {
-      await vscode6.env.clipboard.writeText(query);
+      await vscode.env.clipboard.writeText(query);
     } catch {
     }
-    vscode6.window.showWarningMessage("Agent Orchestrator: usage-limit retry is ready. The retry query was copied to the clipboard.");
+    vscode.window.showWarningMessage("Agent Orchestrator: usage-limit retry is ready. The retry query was copied to the clipboard.");
   }
 }
 
@@ -18418,8 +17398,8 @@ function registerChatParticipant(context, deps) {
       return { errorDetails: { message: err instanceof Error ? err.message : String(err) } };
     }
   };
-  const participant = vscode7.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
-  participant.iconPath = new vscode7.ThemeIcon("organization");
+  const participant = vscode2.chat.createChatParticipant("vscode-agent-orchestrator.main", handler);
+  participant.iconPath = new vscode2.ThemeIcon("organization");
   context.subscriptions.push(participant);
   return participant;
 }
@@ -18470,12 +17450,12 @@ function promptEquals(left, right) {
 }
 async function runNode(args) {
   const { context, deps, node, request, ctx, stream, token, userText } = args;
-  const config = vscode7.workspace.getConfiguration("vscodeAgentOrchestrator");
+  const config = vscode2.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = resolveToolRoundLimit(node.toolRoundLimit, config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools }) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -18490,7 +17470,7 @@ async function runNode(args) {
     if (scheduledRetry) return { metadata: { nodeId: node.id, retryId: scheduledRetry.retryId, retryAt: scheduledRetry.retryAt } };
     const resumableRun = await saveToolRoundLimitResume({ deps, node, err, stream });
     if (resumableRun) return { metadata: { nodeId: node.id, retryId: resumableRun.retryId, retryAt: resumableRun.retryAt } };
-    if (err instanceof vscode7.LanguageModelError) {
+    if (err instanceof vscode2.LanguageModelError) {
       stream.markdown(
         `
 
@@ -18607,19 +17587,20 @@ function formatRetryDelay(ms) {
 function chatHistoryToRuntimeMessages(ctx) {
   const messages = [];
   for (const turn of ctx.history) {
-    if (turn instanceof vscode7.ChatRequestTurn) {
+    if (turn instanceof vscode2.ChatRequestTurn) {
       messages.push({ role: "user", content: turn.prompt });
-    } else if (turn instanceof vscode7.ChatResponseTurn) {
+    } else if (turn instanceof vscode2.ChatResponseTurn) {
       const text = chatResponseTurnToText(turn);
       if (text) messages.push({ role: "assistant", content: text });
     }
   }
   return messages;
 }
-function createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) {
+function createVsCodeModelProvider(args) {
+  const { request, stream, token, toolRoundLimit, blockedTools } = args;
   return {
     async selectModel(selector) {
-      const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
       const toolCallStats = {
         rounds: 0,
         calls: 0,
@@ -18640,7 +17621,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
         },
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = exposedTools(vscode7.lm.tools, blockedTools).map(toLanguageModelChatTool);
+          const tools = exposedTools(vscode2.lm.tools, blockedTools).map(toLanguageModelChatTool);
           const failedToolCalls = /* @__PURE__ */ new Map();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -18651,10 +17632,10 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
             const assistantParts = [];
             const toolCalls = [];
             for await (const part of response.stream) {
-              if (part instanceof vscode7.LanguageModelTextPart) {
+              if (part instanceof vscode2.LanguageModelTextPart) {
                 assistantParts.push(part);
                 yield part.value;
-              } else if (part instanceof vscode7.LanguageModelToolCallPart) {
+              } else if (part instanceof vscode2.LanguageModelToolCallPart) {
                 assistantParts.push(part);
                 toolCalls.push(part);
               }
@@ -18666,11 +17647,11 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
               const toolStats = toolCallStats.tools[toolCall.name] ?? (toolCallStats.tools[toolCall.name] = { calls: 0, failures: 0 });
               toolStats.calls += 1;
             }
-            requestMessages.push(vscode7.LanguageModelChatMessage.Assistant(assistantParts));
+            requestMessages.push(vscode2.LanguageModelChatMessage.Assistant(assistantParts));
             const toolResults = [];
             for (const toolCall of toolCalls) {
-              stream.progress(`Running tool ${toolCall.name}...`);
-              const outcome = await invokeToolResultPart(toolCall, request, token, stream);
+              stream?.progress(`Running tool ${toolCall.name}...`);
+              const outcome = await invokeToolResultPart(toolCall, request?.toolInvocationToken, token, stream);
               if (outcome.failureSignature) {
                 toolCallStats.failures += 1;
                 toolCallStats.tools[toolCall.name].failures += 1;
@@ -18684,7 +17665,7 @@ function createVsCodeModelProvider(request, stream, token, toolRoundLimit, block
               }
               toolResults.push(outcome.resultPart);
             }
-            requestMessages.push(vscode7.LanguageModelChatMessage.User(toolResults));
+            requestMessages.push(vscode2.LanguageModelChatMessage.User(toolResults));
           }
           toolCallStats.reachedLimit = true;
           throw new Error(
@@ -18702,19 +17683,19 @@ function clampToolRoundLimit(value) {
 function resolveToolRoundLimit(nodeLimit, configuredLimit) {
   return clampToolRoundLimit(nodeLimit ?? configuredLimit);
 }
-async function invokeToolResultPart(toolCall, request, token, stream) {
+async function invokeToolResultPart(toolCall, toolInvocationToken, token, stream) {
   try {
-    const result = await vscode7.lm.invokeTool(
+    const result = await vscode2.lm.invokeTool(
       toolCall.name,
-      { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+      { input: toolCall.input, toolInvocationToken },
       token
     );
-    return { resultPart: new vscode7.LanguageModelToolResultPart(toolCall.callId, result.content) };
+    return { resultPart: new vscode2.LanguageModelToolResultPart(toolCall.callId, result.content) };
   } catch (err) {
     const message = toolErrorMessage(toolCall.name, err);
-    stream.progress(message);
+    stream?.progress(message);
     return {
-      resultPart: new vscode7.LanguageModelToolResultPart(toolCall.callId, [new vscode7.LanguageModelTextPart(message)]),
+      resultPart: new vscode2.LanguageModelToolResultPart(toolCall.callId, [new vscode2.LanguageModelTextPart(message)]),
       failureSignature: `${toolCall.name}:${stableStringify(toolCall.input)}:${message}`,
       message
     };
@@ -18745,12 +17726,12 @@ function toLanguageModelChatTool(tool) {
   };
 }
 function toVsCodeMessage(message) {
-  return message.role === "assistant" ? vscode7.LanguageModelChatMessage.Assistant(message.content) : vscode7.LanguageModelChatMessage.User(message.content);
+  return message.role === "assistant" ? vscode2.LanguageModelChatMessage.Assistant(message.content) : vscode2.LanguageModelChatMessage.User(message.content);
 }
 function chatResponseTurnToText(turn) {
   const parts = [];
   for (const r of turn.response) {
-    if (r instanceof vscode7.ChatResponseMarkdownPart) {
+    if (r instanceof vscode2.ChatResponseMarkdownPart) {
       parts.push(typeof r.value === "string" ? r.value : r.value.value);
     }
   }
@@ -18770,37 +17751,46 @@ function toLanguageModelRequestOptions(model, tools) {
   if (model?.reasoningEffort) options.modelOptions = { reasoningEffort: model.reasoningEffort };
   if (tools.length > 0) {
     options.tools = tools;
-    options.toolMode = vscode7.LanguageModelChatToolMode.Auto;
+    options.toolMode = vscode2.LanguageModelChatToolMode.Auto;
   }
   return options;
 }
 async function selectModel(selector, fallback, stream) {
-  if (!selector) return fallback;
+  if (!selector && fallback) return fallback;
   try {
-    const models = await vscode7.lm.selectChatModels(selector);
+    const models = await vscode2.lm.selectChatModels(selector);
     if (models.length === 0) {
-      stream.markdown(
-        `*No chat model matched ${formatModelSelector(selector)}. Using the currently selected model (${fallback.name}).*
+      if (fallback) {
+        stream?.markdown(
+          `*No chat model matched ${formatOptionalModelSelector(selector)}. Using the currently selected model (${fallback.name}).*
 
 `
-      );
-      return fallback;
+        );
+        return fallback;
+      }
+      throw new Error(`No chat model matched ${selector ? formatModelSelector(selector) : "the default selector"}.`);
     }
     const selected = models[0];
-    if (selected.id !== fallback.id) {
-      stream.markdown(`*Using node model ${selected.name} (${selected.id}).*
+    if (fallback && selected.id !== fallback.id) {
+      stream?.markdown(`*Using node model ${selected.name} (${selected.id}).*
 
 `);
     }
     return selected;
   } catch (err) {
-    stream.markdown(
-      `*Could not select node model ${formatModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*
+    if (fallback) {
+      stream?.markdown(
+        `*Could not select node model ${formatOptionalModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*
 
 `
-    );
-    return fallback;
+      );
+      return fallback;
+    }
+    throw err;
   }
+}
+function formatOptionalModelSelector(selector) {
+  return selector ? formatModelSelector(selector) : "the default selector";
 }
 function formatModelSelector(selector) {
   const parts = [
@@ -18811,6 +17801,1124 @@ function formatModelSelector(selector) {
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "the empty selector";
 }
+
+// src/runtime/downstream-state.ts
+function scheduledDispatchDownstreamState(workflow, node, trigger, entries) {
+  if (!isScheduledTrigger(trigger)) return { busy: false, downstream: [] };
+  const targets = workflow.edges.filter((edge) => edge.from === node.id).map((edge) => edge.to);
+  const downstream = targets.map((nodeId) => ({ nodeId, status: latestNodeStatus(entries, nodeId) }));
+  return { busy: downstream.some((target) => target.status === "running"), downstream };
+}
+function isScheduledTrigger(trigger) {
+  return trigger === "timer" || trigger === "interval";
+}
+function latestNodeStatus(entries, nodeId) {
+  let status = "idle";
+  for (const entry of entries) {
+    const node = typeof entry.node === "string" ? entry.node : void 0;
+    const to = typeof entry.to === "string" ? entry.to : void 0;
+    const from = typeof entry.from === "string" ? entry.from : void 0;
+    switch (entry.type) {
+      case "handoff.delivered":
+        if (to === nodeId) status = "queued";
+        break;
+      case "trigger.fired":
+      case "handoff.consumed":
+      case "retry.restored":
+        if (node === nodeId) status = "running";
+        break;
+      case "session.spawned":
+        if (node === nodeId) status = "completed";
+        break;
+      case "session.errored":
+        if (node === nodeId) status = "errored";
+        break;
+      case "guardrail.tripped":
+        if (node === nodeId) status = "blocked";
+        break;
+      case "handoff.emitted":
+        if (from === nodeId) status = "completed";
+        break;
+    }
+  }
+  return status;
+}
+
+// src/runtime/dispatcher.ts
+var CHAT_PARTICIPANT_NAME2 = "@orchestrator";
+var DEFAULT_TOOL_ROUND_LIMIT2 = 64;
+var TOOL_ROUND_LIMIT_RE2 = /tool round limit|Stopped after \d+ tool round/i;
+var Dispatcher = class {
+  constructor(deps) {
+    this.deps = deps;
+  }
+  inFlight = 0;
+  async fireNode(node, ctx) {
+    const config = vscode3.workspace.getConfiguration("vscodeAgentOrchestrator");
+    if (!config.get("enabled", true)) {
+      await this.deps.ledger.append({
+        type: "guardrail.tripped",
+        rule: "globally-disabled",
+        node: node.id,
+        eventId: ctx.rootEventId
+      });
+      return;
+    }
+    const wf = this.deps.getWorkflow();
+    if (wf) {
+      const downstreamState = scheduledDispatchDownstreamState(wf, node, ctx.reason, await this.deps.ledger.tail(1e3));
+      if (downstreamState.busy) {
+        await this.deps.ledger.append({
+          type: "guardrail.tripped",
+          rule: "downstream-running",
+          node: node.id,
+          trigger: ctx.reason,
+          eventId: ctx.rootEventId,
+          detail: {
+            action: "deferred-to-next-tick",
+            downstream: downstreamState.downstream.filter((target) => target.status === "running")
+          }
+        });
+        return;
+      }
+    }
+    if (wf && this.inFlight >= wf.settings.concurrencyLimit) {
+      await this.deps.ledger.append({
+        type: "guardrail.tripped",
+        rule: "concurrencyLimit",
+        node: node.id,
+        limit: wf.settings.concurrencyLimit,
+        eventId: ctx.rootEventId
+      });
+      return;
+    }
+    if (wf) {
+      const today = await this.deps.ledger.countToday("session.spawned");
+      if (today >= wf.settings.dailyHandoffCap) {
+        await this.deps.ledger.append({
+          type: "guardrail.tripped",
+          rule: "dailyHandoffCap",
+          limit: wf.settings.dailyHandoffCap,
+          current: today,
+          action: "halted",
+          eventId: ctx.rootEventId
+        });
+        vscode3.window.showWarningMessage(
+          `Agent Orchestrator: daily spawn cap (${wf.settings.dailyHandoffCap}) reached. Edit workflows.json or use Emergency Stop.`
+        );
+        return;
+      }
+    }
+    const dryRun = config.get("dryRun", false);
+    if (!dryRun && config.get("dispatchMode", "background") === "chat") {
+      await this.openNodeChat(node, ctx);
+      return;
+    }
+    await this.runNodeInBackground(node, ctx, dryRun);
+  }
+  async runNodeInBackground(node, ctx, dryRun) {
+    const config = vscode3.workspace.getConfiguration("vscodeAgentOrchestrator");
+    const tokenSource = new vscode3.CancellationTokenSource();
+    const toolRoundLimit = resolveToolRoundLimit(
+      node.toolRoundLimit,
+      config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT2)
+    );
+    const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+    this.inFlight++;
+    try {
+      await runWorkflowNode({
+        deps: {
+          paths: this.deps.paths,
+          bus: this.deps.bus,
+          ledger: this.deps.ledger,
+          getWorkflow: this.deps.getWorkflow,
+          getAgentInstructions: this.deps.getAgentInstructions,
+          modelProvider: createVsCodeModelProvider({
+            token: tokenSource.token,
+            toolRoundLimit,
+            blockedTools
+          })
+        },
+        node,
+        userText: formatTriggerTag(ctx),
+        dryRun,
+        source: "dispatcher",
+        spawner: "extension-host"
+      });
+    } catch (err) {
+      await this.handleBackgroundRunError(node, err);
+    } finally {
+      tokenSource.dispose();
+      this.inFlight = Math.max(0, this.inFlight - 1);
+    }
+  }
+  async handleBackgroundRunError(node, err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const runError = err instanceof WorkflowNodeRunError ? err : null;
+    const usageRetry = parseUsageLimitRetry(message);
+    if (usageRetry) {
+      const retryState = await saveRetryState(this.deps.paths, {
+        retryKind: "usageLimit",
+        retryAt: usageRetry.retryAt,
+        nodeId: node.id,
+        triggerType: runError?.triggerType ?? "manual",
+        userText: runError?.cleanedUserText ?? "",
+        drainedHandoffs: runError?.drainedHandoffs ?? [],
+        reason: message
+      });
+      await this.deps.ledger.append({
+        type: "retry.scheduled",
+        node: node.id,
+        eventId: runError?.eventId,
+        detail: {
+          retryId: retryState.id,
+          retryAt: usageRetry.retryAt,
+          waitMs: usageRetry.waitMs,
+          retryDelayMs: usageRetry.retryDelayMs,
+          matchedText: usageRetry.matchedText,
+          background: true,
+          drainedHandoffs: retryState.drainedHandoffs.length
+        }
+      });
+      setTimeout(() => {
+        void this.fireNode(node, {
+          reason: "manual",
+          triggerDetail: { retryId: retryState.id, usageLimitRetry: 1 }
+        });
+      }, usageRetry.retryDelayMs);
+      return;
+    }
+    if (TOOL_ROUND_LIMIT_RE2.test(message)) {
+      const retryAt = (/* @__PURE__ */ new Date()).toISOString();
+      const retryState = await saveRetryState(this.deps.paths, {
+        retryKind: "toolRoundLimit",
+        retryAt,
+        nodeId: node.id,
+        triggerType: runError?.triggerType ?? "manual",
+        userText: runError?.cleanedUserText ?? "",
+        drainedHandoffs: runError?.drainedHandoffs ?? [],
+        reason: message
+      });
+      await this.deps.ledger.append({
+        type: "retry.scheduled",
+        node: node.id,
+        eventId: runError?.eventId,
+        detail: {
+          retryId: retryState.id,
+          retryAt,
+          retryKind: retryState.retryKind,
+          manualResume: true,
+          background: true,
+          drainedHandoffs: retryState.drainedHandoffs.length,
+          reason: message
+        }
+      });
+    }
+  }
+  async openNodeChat(node, ctx) {
+    const triggerTag = formatTriggerTag(ctx);
+    const query = `${CHAT_PARTICIPANT_NAME2} /run ${node.id} ${triggerTag}`;
+    this.inFlight++;
+    try {
+      await vscode3.commands.executeCommand("workbench.action.chat.open", { query });
+    } catch (err) {
+      try {
+        await vscode3.commands.executeCommand("workbench.action.chat.open");
+        await vscode3.env.clipboard.writeText(query);
+        vscode3.window.showInformationMessage(
+          `Agent Orchestrator: trigger fired but the chat command refused a prefilled query. Query was copied to your clipboard. Underlying error: ${err instanceof Error ? err.message : err}`
+        );
+      } catch {
+        vscode3.window.showErrorMessage(
+          `Agent Orchestrator: failed to open chat for ${node.id}. Make sure VS Code's chat view is available.`
+        );
+      }
+    } finally {
+      setTimeout(() => {
+        this.inFlight = Math.max(0, this.inFlight - 1);
+      }, 5e3);
+    }
+  }
+};
+function formatTriggerTag(ctx) {
+  const detailParts = [];
+  if (ctx.triggerDetail) {
+    for (const [key, value] of Object.entries(ctx.triggerDetail)) {
+      if (typeof value === "string" || typeof value === "number") detailParts.push(`${key}=${value}`);
+    }
+  }
+  const detail = detailParts.length > 0 ? `:${detailParts.join(",")}` : "";
+  return `[triggered:${ctx.reason}${detail}]`;
+}
+
+// src/runtime/triggers/timer-trigger.ts
+var import_cron_parser = __toESM(require_parser());
+var TimerTrigger = class {
+  constructor(node, cfg, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  timeout = null;
+  disposed = false;
+  start() {
+    this.scheduleNext();
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+  }
+  scheduleNext() {
+    if (this.disposed) return;
+    let nextMs;
+    try {
+      const interval = import_cron_parser.default.parseExpression(this.cfg.cron, {
+        tz: this.cfg.tz === "utc" ? "UTC" : void 0
+      });
+      const next = interval.next().toDate();
+      nextMs = Math.max(1e3, next.getTime() - Date.now());
+    } catch (err) {
+      this.deps.log(
+        `Timer trigger for node ${this.node.id}: invalid cron "${this.cfg.cron}" (${err instanceof Error ? err.message : err}). Will retry in 5 min.`,
+        "error"
+      );
+      nextMs = 5 * 60 * 1e3;
+    }
+    this.timeout = setTimeout(async () => {
+      if (this.disposed) return;
+      try {
+        await this.deps.fire(this.node, { cron: this.cfg.cron });
+      } catch (err) {
+        this.deps.log(
+          `Timer trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+          "error"
+        );
+      } finally {
+        this.scheduleNext();
+      }
+    }, nextMs);
+  }
+};
+
+// shared/schedule.ts
+var import_cron_parser2 = __toESM(require_parser());
+var UNIT_MS = {
+  seconds: 1e3,
+  minutes: 6e4,
+  hours: 36e5,
+  days: 864e5
+};
+function intervalToMs(cfg) {
+  const every = Math.max(1, Math.floor(cfg.every));
+  return every * UNIT_MS[cfg.unit];
+}
+function nextIntervalDelayMs(cfg, nowMs = Date.now()) {
+  const intervalMs = intervalToMs(cfg);
+  if (!Number.isFinite(intervalMs) || intervalMs <= 0) return null;
+  const elapsedMs = nowMs % intervalMs;
+  return elapsedMs === 0 ? intervalMs : intervalMs - elapsedMs;
+}
+
+// src/runtime/triggers/interval-trigger.ts
+var IntervalTrigger = class {
+  constructor(node, cfg, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  timeout = null;
+  disposed = false;
+  start() {
+    const intervalMs = intervalToMs(this.cfg);
+    if (this.cfg.runOnStart) {
+      void this.fire(intervalMs);
+    }
+    this.scheduleNext(intervalMs);
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+  }
+  scheduleNext(intervalMs) {
+    if (this.disposed) return;
+    const nextMs = nextIntervalDelayMs(this.cfg) ?? intervalMs;
+    this.timeout = setTimeout(async () => {
+      await this.fire(intervalMs);
+      this.scheduleNext(intervalMs);
+    }, Math.max(1e3, nextMs));
+  }
+  async fire(intervalMs) {
+    if (this.disposed) return;
+    try {
+      await this.deps.fire(this.node, {
+        every: this.cfg.every,
+        unit: this.cfg.unit,
+        intervalMs,
+        runOnStart: this.cfg.runOnStart ? 1 : 0
+      });
+    } catch (err) {
+      this.deps.log(
+        `Interval trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+
+// src/runtime/triggers/handoff-trigger.ts
+var vscode4 = __toESM(require("vscode"));
+var path8 = __toESM(require("path"));
+var fs8 = __toESM(require("fs"));
+var HandoffTrigger = class {
+  constructor(node, p, deps) {
+    this.node = node;
+    this.p = p;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  watcher = null;
+  debounceTimer = null;
+  pendingFiles = /* @__PURE__ */ new Set();
+  start() {
+    const dir = inboxDir(this.p, this.node.id);
+    fs8.mkdirSync(dir, { recursive: true });
+    const pattern = new vscode4.RelativePattern(vscode4.Uri.file(dir), "*.json");
+    this.watcher = vscode4.workspace.createFileSystemWatcher(pattern, false, true, true);
+    this.watcher.onDidCreate((uri) => this.onFile(uri.fsPath));
+    for (const fileName of fs8.readdirSync(dir)) {
+      if (fileName.endsWith(".json")) this.onFile(path8.join(dir, fileName));
+    }
+  }
+  dispose() {
+    if (this.watcher) {
+      this.watcher.dispose();
+      this.watcher = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingFiles.clear();
+  }
+  onFile(filePath) {
+    this.pendingFiles.add(path8.basename(filePath));
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => {
+      const count = this.pendingFiles.size;
+      this.pendingFiles.clear();
+      this.deps.fire(this.node, { handoffFiles: count }).catch((err) => {
+        this.deps.log(
+          `Handoff trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+          "error"
+        );
+      });
+    }, 500);
+  }
+};
+
+// src/runtime/triggers/gh-pr-trigger.ts
+var vscode5 = __toESM(require("vscode"));
+var fs9 = __toESM(require("fs"));
+var path9 = __toESM(require("path"));
+var import_child_process2 = require("child_process");
+var import_util2 = require("util");
+
+// src/runtime/triggers/gh-pr-events.ts
+function detectGhPrEvents(prs, perNode, configuredEvents, branchFilter = null) {
+  const seen = normalizeSeen(perNode.seen);
+  const highWatermark = perNode.highestSeenPrNumber ?? highestSeenPrNumber(seen);
+  const isFirstPoll = !perNode.lastPolledAt && perNode.highestSeenPrNumber === void 0 && Object.keys(seen).length === 0;
+  const events = [];
+  let nextHighWatermark = highWatermark;
+  for (const pr of [...prs].sort((left, right) => left.number - right.number)) {
+    if (branchFilter && !branchFilter.test(pr.headRefName)) continue;
+    const previous = seen[String(pr.number)];
+    const eventKind = isFirstPoll ? null : inferPrEventKind(pr, previous, highWatermark, configuredEvents);
+    if (eventKind && configuredEvents.includes(eventKind)) {
+      events.push({ pr, eventKind });
+    }
+    seen[String(pr.number)] = { headRefOid: pr.headRefOid, state: normalizePrState(pr.state) };
+    if (nextHighWatermark === void 0 || pr.number > nextHighWatermark) nextHighWatermark = pr.number;
+  }
+  return {
+    events,
+    nextState: {
+      ...perNode,
+      seen,
+      highestSeenPrNumber: nextHighWatermark
+    }
+  };
+}
+function normalizeSeen(seen) {
+  const normalized = {};
+  for (const [number, value] of Object.entries(seen)) {
+    normalized[number] = typeof value === "string" ? { headRefOid: value, state: "OPEN" } : value;
+  }
+  return normalized;
+}
+function inferPrEventKind(pr, previous, highWatermark, configuredEvents) {
+  const currentState = normalizePrState(pr.state);
+  if (!previous) {
+    if (highWatermark !== void 0 && pr.number <= highWatermark) return null;
+    if (closedPrState(currentState) && configuredEvents.includes("closed")) return "closed";
+    return "opened";
+  }
+  const previousState = normalizePrState(previous.state);
+  if (!closedPrState(previousState) && closedPrState(currentState)) return "closed";
+  if (closedPrState(previousState) && currentState === "OPEN") return "reopened";
+  if (currentState === "OPEN" && previous.headRefOid !== pr.headRefOid) return "synchronize";
+  return null;
+}
+function highestSeenPrNumber(seen) {
+  const numbers = Object.keys(seen).map((value) => Number(value)).filter(Number.isFinite);
+  return numbers.length > 0 ? Math.max(...numbers) : void 0;
+}
+function normalizePrState(state) {
+  return state.trim().toUpperCase();
+}
+function closedPrState(state) {
+  return state === "CLOSED" || state === "MERGED";
+}
+
+// src/runtime/triggers/gh-pr-trigger.ts
+var exec2 = (0, import_util2.promisify)(import_child_process2.execFile);
+var GhPrTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  interval = null;
+  disposed = false;
+  start() {
+    const cfg = vscode5.workspace.getConfiguration("vscodeAgentOrchestrator");
+    const seconds = Math.max(15, cfg.get("ghPollSeconds", 60));
+    void this.poll();
+    this.interval = setInterval(() => void this.poll(), seconds * 1e3);
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+  }
+  async poll() {
+    if (this.disposed) return;
+    let prs;
+    try {
+      const { stdout } = await exec2(
+        "gh",
+        [
+          "pr",
+          "list",
+          "--repo",
+          this.cfg.repo,
+          "--state",
+          "all",
+          "--json",
+          "number,headRefOid,state,title,url,baseRefName,headRefName,closedAt,mergedAt",
+          "--limit",
+          "100"
+        ],
+        { timeout: 3e4 }
+      );
+      prs = JSON.parse(stdout);
+    } catch (err) {
+      this.deps.log(
+        `gh pr list failed for ${this.cfg.repo}: ${err instanceof Error ? err.message : err}. Is gh installed and authenticated?`,
+        "warn"
+      );
+      return;
+    }
+    const state = await loadState(this.p);
+    const perNode = state.perNode[this.node.id] ?? { seen: {} };
+    let branchFilter = null;
+    if (this.cfg.branchFilter) {
+      try {
+        branchFilter = new RegExp(this.cfg.branchFilter);
+      } catch (err) {
+        this.deps.log(
+          `Invalid branchFilter for ${this.cfg.repo} on node ${this.node.id}: ${err instanceof Error ? err.message : err}`,
+          "warn"
+        );
+      }
+    }
+    const detected = detectGhPrEvents(prs, perNode, this.cfg.events, branchFilter);
+    for (const event of detected.events) {
+      const pr = event.pr;
+      const payload = this.bus.buildPayload({
+        from: "external",
+        to: this.node.id,
+        edgeId: null,
+        trigger: { type: "ghPr", prNumber: pr.number, headSha: pr.headRefOid, repo: this.cfg.repo, eventKind: event.eventKind },
+        payload: {
+          prNumber: pr.number,
+          prUrl: pr.url,
+          title: pr.title,
+          baseRef: pr.baseRefName,
+          headRef: pr.headRefName,
+          headSha: pr.headRefOid,
+          state: pr.state,
+          closedAt: pr.closedAt ?? null,
+          mergedAt: pr.mergedAt ?? null,
+          eventKind: event.eventKind
+        }
+      });
+      await this.bus.deliver(payload);
+      this.deps.fire(this.node, {
+        prNumber: pr.number,
+        repo: this.cfg.repo,
+        headSha: pr.headRefOid,
+        state: pr.state,
+        eventKind: event.eventKind
+      }).catch((err) => {
+        this.deps.log(`gh-pr fire threw: ${err instanceof Error ? err.message : err}`, "error");
+      });
+    }
+    detected.nextState.lastPolledAt = (/* @__PURE__ */ new Date()).toISOString();
+    state.perNode[this.node.id] = detected.nextState;
+    await saveState(this.p, state);
+  }
+};
+async function loadState(p) {
+  if (!fs9.existsSync(p.triggersStateJson)) return { perNode: {} };
+  try {
+    return JSON.parse(await fs9.promises.readFile(p.triggersStateJson, "utf8"));
+  } catch {
+    return { perNode: {} };
+  }
+}
+async function saveState(p, state) {
+  await fs9.promises.mkdir(path9.dirname(p.triggersStateJson), { recursive: true });
+  await fs9.promises.writeFile(p.triggersStateJson, JSON.stringify(state, null, 2), "utf8");
+}
+
+// src/runtime/triggers/file-change-trigger.ts
+var path10 = __toESM(require("path"));
+var vscode6 = __toESM(require("vscode"));
+var FileChangeTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  watcher = null;
+  debounceTimer = null;
+  pendingFiles = /* @__PURE__ */ new Map();
+  start() {
+    const pattern = new vscode6.RelativePattern(vscode6.Uri.file(this.p.workspaceRoot), this.cfg.glob);
+    this.watcher = vscode6.workspace.createFileSystemWatcher(pattern, false, false, false);
+    this.watcher.onDidCreate((uri) => this.onFile("created", uri));
+    this.watcher.onDidChange((uri) => this.onFile("changed", uri));
+    this.watcher.onDidDelete((uri) => this.onFile("deleted", uri));
+  }
+  dispose() {
+    if (this.watcher) {
+      this.watcher.dispose();
+      this.watcher = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingFiles.clear();
+  }
+  onFile(event, uri) {
+    const relativePath = path10.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
+    this.pendingFiles.set(relativePath, { path: relativePath, event });
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => void this.flush(), 500);
+  }
+  async flush() {
+    const files = Array.from(this.pendingFiles.values());
+    this.pendingFiles.clear();
+    if (files.length === 0) return;
+    try {
+      const payload = this.bus.buildPayload({
+        from: "external",
+        to: this.node.id,
+        edgeId: null,
+        trigger: { type: "fileChange", glob: this.cfg.glob, fileCount: files.length },
+        payload: { glob: this.cfg.glob, files }
+      });
+      await this.bus.deliver(payload);
+      await this.deps.fire(this.node, { glob: this.cfg.glob, fileCount: files.length });
+    } catch (err) {
+      this.deps.log(
+        `File change trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+
+// src/runtime/triggers/startup-trigger.ts
+var StartupTrigger = class {
+  constructor(node, cfg, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  timeout = null;
+  disposed = false;
+  start() {
+    const delayMs = Math.max(0, this.cfg.delaySeconds ?? 3) * 1e3;
+    this.timeout = setTimeout(() => {
+      if (this.disposed) return;
+      this.deps.fire(this.node, { delaySeconds: this.cfg.delaySeconds ?? 3 }).catch((err) => {
+        this.deps.log(
+          `Startup trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+          "error"
+        );
+      });
+    }, delayMs);
+  }
+  dispose() {
+    this.disposed = true;
+    if (this.timeout) {
+      clearTimeout(this.timeout);
+      this.timeout = null;
+    }
+  }
+};
+
+// src/runtime/triggers/diagnostics-trigger.ts
+var path11 = __toESM(require("path"));
+var vscode7 = __toESM(require("vscode"));
+var DiagnosticsTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+    this.globPattern = compileGlob(cfg.glob);
+  }
+  nodeId;
+  disposable = null;
+  debounceTimer = null;
+  pendingUris = /* @__PURE__ */ new Map();
+  globPattern;
+  start() {
+    this.disposable = vscode7.languages.onDidChangeDiagnostics((event) => {
+      this.queue(event.uris);
+    });
+  }
+  dispose() {
+    if (this.disposable) {
+      this.disposable.dispose();
+      this.disposable = null;
+    }
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    this.pendingUris.clear();
+  }
+  queue(uris) {
+    for (const uri of uris) {
+      if (uri.scheme !== "file") continue;
+      const relativePath = path11.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/");
+      if (relativePath.startsWith("..") || path11.isAbsolute(relativePath)) continue;
+      if (!this.globPattern.test(relativePath)) continue;
+      this.pendingUris.set(uri.fsPath, uri);
+    }
+    if (this.pendingUris.size === 0) return;
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    this.debounceTimer = setTimeout(() => void this.flush(), this.cfg.debounceMs ?? 1e3);
+  }
+  async flush() {
+    const uris = Array.from(this.pendingUris.values());
+    this.pendingUris.clear();
+    const files = uris.map((uri) => ({ uri, path: path11.relative(this.p.workspaceRoot, uri.fsPath).replace(/\\/g, "/") })).map(({ uri, path: relativePath }) => ({
+      path: relativePath,
+      diagnostics: vscode7.languages.getDiagnostics(uri).filter((diagnostic) => severityMatches(diagnostic.severity, this.cfg.severity)).slice(0, 20).map((diagnostic) => ({
+        severity: severityLabel(diagnostic.severity),
+        message: diagnostic.message,
+        source: diagnostic.source,
+        code: typeof diagnostic.code === "object" ? String(diagnostic.code.value) : diagnostic.code,
+        range: {
+          startLine: diagnostic.range.start.line + 1,
+          startCharacter: diagnostic.range.start.character + 1,
+          endLine: diagnostic.range.end.line + 1,
+          endCharacter: diagnostic.range.end.character + 1
+        }
+      }))
+    })).filter((file) => file.diagnostics.length > 0).slice(0, 25);
+    const diagnosticCount = files.reduce((total, file) => total + file.diagnostics.length, 0);
+    if (diagnosticCount === 0) return;
+    try {
+      const payload = this.bus.buildPayload({
+        from: "external",
+        to: this.node.id,
+        edgeId: null,
+        trigger: {
+          type: "diagnostics",
+          glob: this.cfg.glob,
+          severity: this.cfg.severity,
+          fileCount: files.length,
+          diagnosticCount
+        },
+        payload: { glob: this.cfg.glob, severity: this.cfg.severity, files }
+      });
+      await this.bus.deliver(payload);
+      await this.deps.fire(this.node, { fileCount: files.length, diagnosticCount, severity: this.cfg.severity });
+    } catch (err) {
+      this.deps.log(
+        `Diagnostics trigger fire for node ${this.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+};
+function severityMatches(actual, configured) {
+  if (configured === "any") return true;
+  return severityLabel(actual) === configured;
+}
+function severityLabel(severity) {
+  switch (severity) {
+    case vscode7.DiagnosticSeverity.Error:
+      return "error";
+    case vscode7.DiagnosticSeverity.Warning:
+      return "warning";
+    case vscode7.DiagnosticSeverity.Information:
+      return "info";
+    case vscode7.DiagnosticSeverity.Hint:
+    default:
+      return "hint";
+  }
+}
+function compileGlob(glob) {
+  const normalized = glob.trim().replace(/\\/g, "/") || "**/*";
+  let pattern = "^";
+  for (let index = 0; index < normalized.length; index++) {
+    const char = normalized[index];
+    const next = normalized[index + 1];
+    const afterNext = normalized[index + 2];
+    if (char === "*" && next === "*" && afterNext === "/") {
+      pattern += "(?:.*/)?";
+      index += 2;
+    } else if (char === "*" && next === "*") {
+      pattern += ".*";
+      index += 1;
+    } else if (char === "*") {
+      pattern += "[^/]*";
+    } else if (char === "?") {
+      pattern += "[^/]";
+    } else {
+      pattern += escapeRegExp2(char);
+    }
+  }
+  return new RegExp(`${pattern}$`, "i");
+}
+function escapeRegExp2(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// src/runtime/triggers/webhook-trigger.ts
+var http = __toESM(require("http"));
+var DEFAULT_WEBHOOK_PORT = 8787;
+var DEFAULT_SECRET_HEADER = "x-agent-orchestrator-secret";
+var MAX_BODY_BYTES = 1e6;
+var WebhookTrigger = class {
+  constructor(node, cfg, p, bus, deps) {
+    this.node = node;
+    this.cfg = cfg;
+    this.p = p;
+    this.bus = bus;
+    this.deps = deps;
+    this.nodeId = node.id;
+  }
+  nodeId;
+  unregister = null;
+  start() {
+    try {
+      this.unregister = WebhookServerRegistry.register({
+        node: this.node,
+        cfg: this.cfg,
+        p: this.p,
+        bus: this.bus,
+        deps: this.deps
+      });
+      const port = this.cfg.port ?? DEFAULT_WEBHOOK_PORT;
+      this.deps.log(`Webhook trigger for node ${this.node.id} listening on http://127.0.0.1:${port}${normalizeWebhookPath(this.cfg.path)}`);
+    } catch (err) {
+      this.deps.log(
+        `Webhook trigger for node ${this.node.id} failed to start: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+    }
+  }
+  dispose() {
+    this.unregister?.();
+    this.unregister = null;
+  }
+};
+var WebhookServerRegistry = class {
+  static servers = /* @__PURE__ */ new Map();
+  static register(registration) {
+    const port = registration.cfg.port ?? DEFAULT_WEBHOOK_PORT;
+    let server = this.servers.get(port);
+    if (!server) {
+      server = new WebhookServer(port);
+      this.servers.set(port, server);
+    }
+    return server.register(registration, () => {
+      if (server && server.routeCount === 0) {
+        server.close();
+        this.servers.delete(port);
+      }
+    });
+  }
+};
+var WebhookServer = class {
+  constructor(port) {
+    this.port = port;
+    this.server = http.createServer((request, response) => {
+      void this.handle(request, response);
+    });
+    this.server.listen(port, "127.0.0.1");
+  }
+  server;
+  routes = /* @__PURE__ */ new Map();
+  get routeCount() {
+    return this.routes.size;
+  }
+  register(registration, onEmpty) {
+    const routePath = normalizeWebhookPath(registration.cfg.path);
+    const existing = this.routes.get(routePath);
+    if (existing && existing.node.id !== registration.node.id) {
+      throw new Error(`Webhook path ${routePath} is already registered on port ${this.port}.`);
+    }
+    this.routes.set(routePath, registration);
+    return () => {
+      const current = this.routes.get(routePath);
+      if (current?.node.id === registration.node.id) this.routes.delete(routePath);
+      onEmpty();
+    };
+  }
+  close() {
+    this.server.close();
+  }
+  async handle(request, response) {
+    const url = new URL(request.url ?? "/", `http://127.0.0.1:${this.port}`);
+    const route = this.routes.get(normalizeWebhookPath(url.pathname));
+    if (!route) {
+      writeJson(response, 404, { ok: false, error: "No webhook route registered for this path." });
+      return;
+    }
+    if ((request.method ?? "GET").toUpperCase() !== "POST") {
+      writeJson(response, 405, { ok: false, error: "Webhook triggers accept POST requests only." });
+      return;
+    }
+    const auth = validateSecret(route.cfg, request.headers);
+    if (!auth.ok) {
+      writeJson(response, auth.status, { ok: false, error: auth.error });
+      return;
+    }
+    let body;
+    try {
+      body = await readRequestBody(request);
+    } catch (err) {
+      writeJson(response, 400, { ok: false, error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+    const payload = buildWebhookPayload({ request, url, body });
+    try {
+      const handoff = route.bus.buildPayload({
+        from: "external",
+        to: route.node.id,
+        edgeId: null,
+        trigger: { type: "webhook", path: route.cfg.path, port: route.cfg.port ?? DEFAULT_WEBHOOK_PORT },
+        payload
+      });
+      await route.bus.deliver(handoff);
+      await route.deps.fire(route.node, { path: payload.path, method: payload.method });
+      writeJson(response, 202, { ok: true, nodeId: route.node.id, handoffId: handoff.id });
+    } catch (err) {
+      route.deps.log(
+        `Webhook trigger fire for node ${route.node.id} threw: ${err instanceof Error ? err.message : err}`,
+        "error"
+      );
+      writeJson(response, 500, { ok: false, error: "Webhook trigger failed." });
+    }
+  }
+};
+function normalizeWebhookPath(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return "/webhook";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+function buildWebhookPayload(args) {
+  return {
+    method: (args.request.method ?? "POST").toUpperCase(),
+    path: normalizeWebhookPath(args.url.pathname),
+    query: queryToRecord(args.url.searchParams),
+    headers: headersToRecord(args.request.headers),
+    body: args.body,
+    receivedAt: args.receivedAt ?? (/* @__PURE__ */ new Date()).toISOString()
+  };
+}
+async function readRequestBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BODY_BYTES) throw new Error("Webhook body is too large.");
+    chunks.push(buffer);
+  }
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw.trim()) return null;
+  const contentType = headerValue(request.headers["content-type"]);
+  if (contentType.includes("application/json")) {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error("Webhook body is not valid JSON.");
+    }
+  }
+  return raw;
+}
+function validateSecret(cfg, headers) {
+  if (!cfg.secretEnv) return { ok: true };
+  const expected = process.env[cfg.secretEnv];
+  if (!expected) {
+    return { ok: false, status: 500, error: `Webhook secret environment variable ${cfg.secretEnv} is not set.` };
+  }
+  const headerName = (cfg.secretHeader || DEFAULT_SECRET_HEADER).toLocaleLowerCase();
+  const actual = headerValue(headers[headerName]);
+  if (actual !== expected) return { ok: false, status: 401, error: "Webhook secret did not match." };
+  return { ok: true };
+}
+function queryToRecord(searchParams) {
+  const out = {};
+  for (const key of new Set(searchParams.keys())) {
+    const values = searchParams.getAll(key);
+    out[key] = values.length === 1 ? values[0] : values;
+  }
+  return out;
+}
+function headersToRecord(headers) {
+  const out = {};
+  for (const [key, value] of Object.entries(headers)) {
+    out[key] = headerValue(value);
+  }
+  return out;
+}
+function headerValue(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return value ?? "";
+}
+function writeJson(response, status, body) {
+  response.writeHead(status, { "Content-Type": "application/json" });
+  response.end(JSON.stringify(body));
+}
+
+// src/runtime/trigger-registry.ts
+var TriggerRegistry = class {
+  constructor(dispatcher, p, bus, output) {
+    this.dispatcher = dispatcher;
+    this.p = p;
+    this.bus = bus;
+    this.output = output;
+  }
+  active = /* @__PURE__ */ new Map();
+  reconcile(workflow) {
+    const desired = /* @__PURE__ */ new Set();
+    if (workflow) {
+      for (const node of workflow.nodes) {
+        if (!node.enabled) continue;
+        for (const spec of this.triggerSpecs(node)) {
+          if (spec.trigger.type === "manual") continue;
+          desired.add(spec.key);
+          if (this.active.has(spec.key)) continue;
+          const trigger = this.create(node, spec.trigger);
+          if (trigger) {
+            trigger.start();
+            this.active.set(spec.key, trigger);
+            this.output.appendLine(`[trigger] started ${spec.trigger.type} for ${node.id}`);
+          }
+        }
+      }
+    }
+    for (const [key, trigger] of this.active) {
+      if (!desired.has(key)) {
+        trigger.dispose();
+        this.active.delete(key);
+        this.output.appendLine(`[trigger] stopped ${key}`);
+      }
+    }
+  }
+  disposeAll() {
+    for (const t of this.active.values()) t.dispose();
+    this.active.clear();
+  }
+  triggerSpecs(node) {
+    if (node.trigger.type !== "any") {
+      return [{ key: `${node.id}:${node.trigger.type}:${JSON.stringify(node.trigger)}`, trigger: node.trigger }];
+    }
+    return node.trigger.triggers.map((trigger, index) => ({
+      key: `${node.id}:any:${index}:${trigger.type}:${JSON.stringify(trigger)}`,
+      trigger
+    }));
+  }
+  create(node, triggerConfig) {
+    const deps = {
+      fire: async (n, detail) => {
+        const ctx = { reason: triggerConfig.type, triggerDetail: detail };
+        await this.dispatcher.fireNode(n, ctx);
+      },
+      log: (msg, level = "info") => {
+        this.output.appendLine(`[${level}] ${msg}`);
+      }
+    };
+    switch (triggerConfig.type) {
+      case "timer":
+        return new TimerTrigger(node, triggerConfig, deps);
+      case "interval":
+        return new IntervalTrigger(node, triggerConfig, deps);
+      case "handoff":
+        return new HandoffTrigger(node, this.p, deps);
+      case "ghPr":
+        return new GhPrTrigger(node, triggerConfig, this.p, this.bus, deps);
+      case "fileChange":
+        return new FileChangeTrigger(node, triggerConfig, this.p, this.bus, deps);
+      case "startup":
+        return new StartupTrigger(node, triggerConfig, deps);
+      case "diagnostics":
+        return new DiagnosticsTrigger(node, triggerConfig, this.p, this.bus, deps);
+      case "webhook":
+        return new WebhookTrigger(node, triggerConfig, this.p, this.bus, deps);
+      case "manual":
+      default:
+        return null;
+    }
+  }
+};
 
 // src/webview/panel.ts
 var vscode8 = __toESM(require("vscode"));
@@ -18996,7 +19104,13 @@ async function activate(context) {
   const ledger = p ? new Ledger(p.ledgerJsonl) : null;
   const store = p ? new WorkflowStore(p) : null;
   const bus = p ? new MessageBus(p) : null;
-  const dispatcher = ledger && store ? new Dispatcher(ledger, () => store.get()) : null;
+  const dispatcher = ledger && store && p && bus ? new Dispatcher({
+    ledger,
+    paths: p,
+    bus,
+    getWorkflow: () => store.get(),
+    getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null
+  }) : null;
   const triggers = dispatcher && p && bus ? new TriggerRegistry(dispatcher, p, bus, output) : null;
   if (store) {
     await store.load();

@@ -206,7 +206,7 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider(request, stream, token, toolRoundLimit, blockedTools) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools }) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -361,16 +361,19 @@ function chatHistoryToRuntimeMessages(ctx: vscode.ChatContext): RuntimeChatMessa
   return messages;
 }
 
-function createVsCodeModelProvider(
-  request: vscode.ChatRequest,
-  stream: vscode.ChatResponseStream,
-  token: vscode.CancellationToken,
-  toolRoundLimit: number,
-  blockedTools: readonly string[]
-): RuntimeModelProvider {
+export interface VsCodeModelProviderArgs {
+  request?: vscode.ChatRequest;
+  stream?: Pick<vscode.ChatResponseStream, "markdown" | "progress">;
+  token: vscode.CancellationToken;
+  toolRoundLimit: number;
+  blockedTools: readonly string[];
+}
+
+export function createVsCodeModelProvider(args: VsCodeModelProviderArgs): RuntimeModelProvider {
+  const { request, stream, token, toolRoundLimit, blockedTools } = args;
   return {
     async selectModel(selector: ModelSelector | undefined) {
-      const model = await selectModel(toLanguageModelSelector(selector), request.model, stream);
+      const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
       const toolCallStats: RuntimeToolCallStats = {
         rounds: 0,
         calls: 0,
@@ -420,8 +423,8 @@ function createVsCodeModelProvider(
             requestMessages.push(vscode.LanguageModelChatMessage.Assistant(assistantParts));
             const toolResults: vscode.LanguageModelToolResultPart[] = [];
             for (const toolCall of toolCalls) {
-              stream.progress(`Running tool ${toolCall.name}...`);
-              const outcome = await invokeToolResultPart(toolCall, request, token, stream);
+              stream?.progress(`Running tool ${toolCall.name}...`);
+              const outcome = await invokeToolResultPart(toolCall, request?.toolInvocationToken, token, stream);
               if (outcome.failureSignature) {
                 toolCallStats.failures += 1;
                 toolCallStats.tools[toolCall.name].failures += 1;
@@ -458,26 +461,26 @@ function clampToolRoundLimit(value: number): number {
   return Math.max(MIN_TOOL_ROUND_LIMIT, Math.min(MAX_TOOL_ROUND_LIMIT, Math.floor(value)));
 }
 
-function resolveToolRoundLimit(nodeLimit: number | null | undefined, configuredLimit: number): number {
+export function resolveToolRoundLimit(nodeLimit: number | null | undefined, configuredLimit: number): number {
   return clampToolRoundLimit(nodeLimit ?? configuredLimit);
 }
 
 async function invokeToolResultPart(
   toolCall: vscode.LanguageModelToolCallPart,
-  request: vscode.ChatRequest,
+  toolInvocationToken: vscode.ChatRequest["toolInvocationToken"] | undefined,
   token: vscode.CancellationToken,
-  stream: vscode.ChatResponseStream
+  stream: Pick<vscode.ChatResponseStream, "progress"> | undefined
 ): Promise<ToolInvocationOutcome> {
   try {
     const result = await vscode.lm.invokeTool(
       toolCall.name,
-      { input: toolCall.input, toolInvocationToken: request.toolInvocationToken },
+      { input: toolCall.input, toolInvocationToken },
       token
     );
     return { resultPart: new vscode.LanguageModelToolResultPart(toolCall.callId, result.content) };
   } catch (err) {
     const message = toolErrorMessage(toolCall.name, err);
-    stream.progress(message);
+    stream?.progress(message);
     return {
       resultPart: new vscode.LanguageModelToolResultPart(toolCall.callId, [new vscode.LanguageModelTextPart(message)]),
       failureSignature: `${toolCall.name}:${stableStringify(toolCall.input)}:${message}`,
@@ -557,29 +560,39 @@ function toLanguageModelRequestOptions(
 
 async function selectModel(
   selector: vscode.LanguageModelChatSelector | undefined,
-  fallback: vscode.LanguageModelChat,
-  stream: vscode.ChatResponseStream
+  fallback: vscode.LanguageModelChat | undefined,
+  stream: Pick<vscode.ChatResponseStream, "markdown"> | undefined
 ): Promise<vscode.LanguageModelChat> {
-  if (!selector) return fallback;
+  if (!selector && fallback) return fallback;
   try {
     const models = await vscode.lm.selectChatModels(selector);
     if (models.length === 0) {
-      stream.markdown(
-        `*No chat model matched ${formatModelSelector(selector)}. Using the currently selected model (${fallback.name}).*\n\n`
-      );
-      return fallback;
+      if (fallback) {
+        stream?.markdown(
+          `*No chat model matched ${formatOptionalModelSelector(selector)}. Using the currently selected model (${fallback.name}).*\n\n`
+        );
+        return fallback;
+      }
+      throw new Error(`No chat model matched ${selector ? formatModelSelector(selector) : "the default selector"}.`);
     }
     const selected = models[0];
-    if (selected.id !== fallback.id) {
-      stream.markdown(`*Using node model ${selected.name} (${selected.id}).*\n\n`);
+    if (fallback && selected.id !== fallback.id) {
+      stream?.markdown(`*Using node model ${selected.name} (${selected.id}).*\n\n`);
     }
     return selected;
   } catch (err) {
-    stream.markdown(
-      `*Could not select node model ${formatModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*\n\n`
-    );
-    return fallback;
+    if (fallback) {
+      stream?.markdown(
+        `*Could not select node model ${formatOptionalModelSelector(selector)}: ${err instanceof Error ? err.message : String(err)}. Using the currently selected model (${fallback.name}).*\n\n`
+      );
+      return fallback;
+    }
+    throw err;
   }
+}
+
+function formatOptionalModelSelector(selector: vscode.LanguageModelChatSelector | undefined): string {
+  return selector ? formatModelSelector(selector) : "the default selector";
 }
 
 function formatModelSelector(selector: vscode.LanguageModelChatSelector): string {

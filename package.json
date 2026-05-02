@@ -86,7 +86,16 @@
         "vscodeAgentOrchestrator.dryRun": {
           "type": "boolean",
           "default": false,
-          "description": "When true, log dispatch intents to the ledger but do not open chats."
+          "description": "When true, log dispatch intents to the ledger without making model calls."
+        },
+        "vscodeAgentOrchestrator.dispatchMode": {
+          "type": "string",
+          "default": "background",
+          "enum": [
+            "background",
+            "chat"
+          ],
+          "description": "How trigger and graph-editor node runs are dispatched. background runs independently in the extension host; chat uses the legacy VS Code chat panel path. Manual @orchestrator chat requests always run in chat."
         },
         "vscodeAgentOrchestrator.ghPollSeconds": {
           "type": "number",

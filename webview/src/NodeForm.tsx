@@ -135,7 +135,7 @@ export function NodeForm({ node, agents, models, sourceControl, onRefreshSourceC
 
       <h3 style={{ marginTop: 18 }}>Model (optional)</h3>
       <p style={{ fontSize: 11, opacity: 0.7, marginTop: 0 }}>
-        Leave blank to use whatever the user picks in the native chat model dropdown.
+        Blank uses the chat picker for @orchestrator chat runs, or VS Code's default available model for background dispatch.
       </p>
       <label>Model</label>
       <select
