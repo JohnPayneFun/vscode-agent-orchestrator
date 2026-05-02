@@ -369,10 +369,11 @@ export interface VsCodeModelProviderArgs {
   toolRoundLimit: number;
   blockedTools: readonly string[];
   maxToolsPerRequest: number;
+  toolModeNotice?: string;
 }
 
 export function createVsCodeModelProvider(args: VsCodeModelProviderArgs): RuntimeModelProvider {
-  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest } = args;
+  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest, toolModeNotice } = args;
   return {
     async selectModel(selector: ModelSelector | undefined) {
       const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
@@ -395,6 +396,7 @@ export function createVsCodeModelProvider(args: VsCodeModelProviderArgs): Runtim
           return counts.reduce((sum, count) => sum + count, 0);
         },
         async *sendRequest(messages: RuntimeChatMessage[]) {
+          if (toolModeNotice) stream?.progress(toolModeNotice);
           const requestMessages = messages.map(toVsCodeMessage);
           const toolSelection = selectExposedTools(vscode.lm.tools, blockedTools, maxToolsPerRequest);
           if (toolSelection.capped) {

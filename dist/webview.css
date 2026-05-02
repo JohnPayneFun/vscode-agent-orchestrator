@@ -680,6 +680,9 @@ textarea {
   color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
   outline: none;
 }
+.node-context-menu button.danger {
+  color: var(--vscode-errorForeground, #f85149);
+}
 .json-view {
   display: flex;
   flex-direction: column;
@@ -914,6 +917,9 @@ textarea {
 .persona-node.activity-blocked {
   border-color: var(--vscode-errorForeground, #f85149);
 }
+.persona-node.activity-cancelled {
+  border-color: var(--vscode-descriptionForeground, #8b949e);
+}
 .persona-node .label {
   font-weight: 600;
   margin-bottom: 6px;
@@ -958,6 +964,9 @@ textarea {
 .persona-node .runtime-badge.errored,
 .persona-node .runtime-badge.blocked {
   color: var(--vscode-errorForeground, #f85149);
+}
+.persona-node .runtime-badge.cancelled {
+  color: var(--vscode-descriptionForeground, #8b949e);
 }
 .persona-node .agent {
   font-size: 10px;
@@ -1060,6 +1069,9 @@ textarea {
 .activity-status.errored,
 .activity-status.blocked {
   color: var(--vscode-errorForeground, #f85149);
+}
+.activity-status.cancelled {
+  color: var(--vscode-descriptionForeground, #8b949e);
 }
 .workflow-minimap {
   background: var(--vscode-editorWidget-background) !important;

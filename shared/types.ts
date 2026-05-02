@@ -204,6 +204,7 @@ export type LedgerEventType =
   | "session.output"
   | "session.spawned"
   | "session.errored"
+  | "session.cancelled"
   | "usage.recorded"
   | "toolUsage.recorded"
   | "retry.scheduled"
@@ -237,6 +238,7 @@ export type WebviewToExt =
   | { type: "sourceControl.request" }
   | { type: "node.openChat"; nodeId: string; workflow?: Workflow }
   | { type: "node.run"; nodeId: string; workflow?: Workflow }
+  | { type: "node.stop"; nodeId: string }
   | { type: "ledger.tail" }
   | { type: "trigger.test"; nodeId: string; workflow?: Workflow };
 
@@ -247,6 +249,7 @@ export type ExtToWebview =
   | { type: "models.list"; models: ModelOption[] }
   | { type: "sourceControl.detected"; sourceControl: SourceControlInfo }
   | { type: "node.runResult"; nodeId: string; ok: boolean; error?: string }
+  | { type: "node.stopResult"; nodeId: string; ok: boolean; error?: string }
   | { type: "trigger.testResult"; nodeId: string; ok: boolean; error?: string }
   | { type: "ledger.append"; entry: LedgerEntry }
   | { type: "toast"; level: "info" | "warn" | "error"; message: string };

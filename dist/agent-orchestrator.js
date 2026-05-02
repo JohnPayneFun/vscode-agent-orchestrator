@@ -9096,7 +9096,7 @@ var WorkflowNodeRunError = class extends Error {
 };
 async function runWorkflowNode(args) {
   const { deps, node, userText = "", history = [] } = args;
-  const eventId = (0, import_ulid3.ulid)();
+  const eventId = args.eventId ?? (0, import_ulid3.ulid)();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
   let outputSequence = 0;
@@ -9208,6 +9208,9 @@ async function runWorkflowNode(args) {
   } catch (err) {
     await flushOutput(true);
     const message = err instanceof Error ? err.message : String(err);
+    if (args.isCancelled?.()) {
+      throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
+    }
     if (inputTokenCount && model) {
       await recordUsage({
         deps,

@@ -108,6 +108,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   color: var(--vscode-menu-selectionForeground, var(--vscode-foreground));
   outline: none;
 }
+.node-context-menu button.danger { color: var(--vscode-errorForeground, #f85149); }
 
 .json-view {
   display: flex;
@@ -264,6 +265,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 .persona-node.activity-completed { border-color: var(--vscode-charts-green, #3fb950); }
 .persona-node.activity-errored,
 .persona-node.activity-blocked { border-color: var(--vscode-errorForeground, #f85149); }
+.persona-node.activity-cancelled { border-color: var(--vscode-descriptionForeground, #8b949e); }
 .persona-node .label {
   font-weight: 600;
   margin-bottom: 6px;
@@ -303,6 +305,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 .persona-node .runtime-badge.completed { color: var(--vscode-charts-green, #3fb950); }
 .persona-node .runtime-badge.errored,
 .persona-node .runtime-badge.blocked { color: var(--vscode-errorForeground, #f85149); }
+.persona-node .runtime-badge.cancelled { color: var(--vscode-descriptionForeground, #8b949e); }
 .persona-node .agent {
   font-size: 10px;
   opacity: 0.7;
@@ -396,6 +399,7 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
 .activity-status.completed { color: var(--vscode-charts-green, #3fb950); }
 .activity-status.errored,
 .activity-status.blocked { color: var(--vscode-errorForeground, #f85149); }
+.activity-status.cancelled { color: var(--vscode-descriptionForeground, #8b949e); }
 
 .workflow-minimap {
   background: var(--vscode-editorWidget-background) !important;

@@ -41440,6 +41440,7 @@
     onSelectNode,
     onSelectEdge,
     onViewNodeChat,
+    onForceStopNode,
     onClearSelection,
     onMove,
     onAddEdge,
@@ -41520,7 +41521,7 @@
         const flowNode = node;
         onSelectNode(flowNode.id);
         const menuWidth = 168;
-        const menuHeight = 48;
+        const menuHeight = 88;
         setContextMenu({
           nodeId: flowNode.id,
           label: flowNode.data.wfNode.label || flowNode.id,
@@ -41535,6 +41536,11 @@
       onViewNodeChat(contextMenu.nodeId);
       setContextMenu(null);
     }, [contextMenu, onViewNodeChat]);
+    const forceStopContextNode = (0, import_react3.useCallback)(() => {
+      if (!contextMenu) return;
+      onForceStopNode(contextMenu.nodeId);
+      setContextMenu(null);
+    }, [contextMenu, onForceStopNode]);
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "graph-view-root", children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
         index,
@@ -41587,14 +41593,17 @@
           ]
         }
       ),
-      contextMenu ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      contextMenu ? /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
         "div",
         {
           className: "node-context-menu",
           role: "menu",
           "aria-label": `Actions for ${contextMenu.label}`,
           style: { left: contextMenu.x, top: contextMenu.y },
-          children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", onClick: viewContextNodeChat, children: "Open chat window" })
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", onClick: viewContextNodeChat, children: "Open chat window" }),
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", className: "danger", onClick: forceStopContextNode, children: "Force stop" })
+          ]
         }
       ) : null
     ] });
@@ -41617,6 +41626,8 @@
       case "errored":
       case "blocked":
         return "#f85149";
+      case "cancelled":
+        return "#8b949e";
       case "idle":
       default:
         return "#3794ff";
@@ -42407,6 +42418,10 @@
             setStatus(msg.ok ? `Ran node ${msg.nodeId}.` : `Run failed: ${msg.error}`);
             window.setTimeout(() => setStatus(""), 2e3);
             break;
+          case "node.stopResult":
+            setStatus(msg.ok ? `Stopped node ${msg.nodeId}.` : `Stop failed: ${msg.error}`);
+            window.setTimeout(() => setStatus(""), 2500);
+            break;
           case "trigger.testResult":
             setStatus(msg.ok ? `Validation trigger sent to ${msg.nodeId}.` : `Validation failed: ${msg.error}`);
             window.setTimeout(() => setStatus(""), 2500);
@@ -42479,6 +42494,11 @@
       selectNode(id2);
       setRunOutputFocusRequest((request) => request + 1);
       send({ type: "node.openChat", nodeId: id2, workflow });
+    };
+    const forceStopNode = (id2) => {
+      selectNode(id2);
+      setStatus(`Stopping ${id2}...`);
+      send({ type: "node.stop", nodeId: id2 });
     };
     const updateNode = (next) => {
       setWorkflow((wf) => ({
@@ -42587,6 +42607,7 @@
           onSelectNode: selectNode,
           onSelectEdge: selectEdge,
           onViewNodeChat: openNodeChat,
+          onForceStopNode: forceStopNode,
           onClearSelection: clearSelection,
           onMove: moveNode,
           onAddEdge: addEdge2,
@@ -42904,7 +42925,7 @@
       if (entry.type === "session.output") {
         const output = ensureOutput(node, eventId, entry.ts);
         if (typeof entry.content === "string") output.chunks.push(entry.content);
-        if (output.status !== "completed" && output.status !== "errored") output.status = "running";
+        if (output.status !== "completed" && output.status !== "errored" && output.status !== "cancelled") output.status = "running";
         output.updatedAt = entry.ts;
         touchLatest(node, output);
         continue;
@@ -42920,6 +42941,14 @@
         const output = ensureOutput(node, eventId, entry.ts);
         output.status = "errored";
         output.error = typeof entry.error === "string" ? entry.error : "Session errored.";
+        output.updatedAt = entry.ts;
+        touchLatest(node, output);
+        continue;
+      }
+      if (entry.type === "session.cancelled") {
+        const output = ensureOutput(node, eventId, entry.ts);
+        output.status = "cancelled";
+        output.error = "Run was force-stopped.";
         output.updatedAt = entry.ts;
         touchLatest(node, output);
       }
@@ -43020,6 +43049,18 @@
             status: "errored",
             label: "Errored",
             detail: typeof entry.error === "string" ? entry.error : "Session errored.",
+            ts: entry.ts,
+            eventId
+          }
+        };
+      case "session.cancelled":
+        if (!node || !nodeIds.has(node)) return null;
+        return {
+          nodeId: node,
+          activity: {
+            status: "cancelled",
+            label: "Stopped",
+            detail: "Run was force-stopped.",
             ts: entry.ts,
             eventId
           }

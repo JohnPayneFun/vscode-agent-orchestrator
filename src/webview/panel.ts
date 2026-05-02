@@ -20,6 +20,7 @@ export interface PanelDeps {
   getAgentInstructions: (agentId: string) => Promise<string | null>;
   openNodeChat: (nodeId: string, workflow?: Workflow) => Promise<{ ok: boolean; error?: string }>;
   runNode: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
+  stopNode: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   testTrigger: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   tailLedger: () => Promise<LedgerEntry[]>;
   onLedgerEntry: (cb: (e: LedgerEntry) => void) => () => void;
@@ -138,6 +139,11 @@ export class GraphPanelManager {
         }
         const r = await this.deps.runNode(msg.nodeId);
         this.post(panel, { type: "node.runResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
+        return;
+      }
+      case "node.stop": {
+        const result = await this.deps.stopNode(msg.nodeId);
+        this.post(panel, { type: "node.stopResult", nodeId: msg.nodeId, ok: result.ok, error: result.error });
         return;
       }
       case "trigger.test": {

@@ -8188,7 +8188,7 @@ var require_index_umd = __commonJS({
         if (!currPrng) {
           currPrng = detectPrng();
         }
-        return function ulid5(seedTime) {
+        return function ulid6(seedTime) {
           if (isNaN(seedTime)) {
             seedTime = Date.now();
           }
@@ -8201,7 +8201,7 @@ var require_index_umd = __commonJS({
         }
         let lastTime = 0;
         let lastRandom;
-        return function ulid5(seedTime) {
+        return function ulid6(seedTime) {
           if (isNaN(seedTime)) {
             seedTime = Date.now();
           }
@@ -8214,7 +8214,7 @@ var require_index_umd = __commonJS({
           return encodeTime(seedTime, TIME_LEN) + newRandom;
         };
       }
-      const ulid4 = factory();
+      const ulid5 = factory();
       exports3.decodeTime = decodeTime;
       exports3.detectPrng = detectPrng;
       exports3.encodeRandom = encodeRandom;
@@ -8224,7 +8224,7 @@ var require_index_umd = __commonJS({
       exports3.monotonicFactory = monotonicFactory;
       exports3.randomChar = randomChar;
       exports3.replaceCharAt = replaceCharAt;
-      exports3.ulid = ulid4;
+      exports3.ulid = ulid5;
     });
   }
 });
@@ -16622,6 +16622,7 @@ function normalize(value) {
 
 // src/runtime/dispatcher.ts
 var vscode3 = __toESM(require("vscode"));
+var import_ulid4 = __toESM(require_index_umd());
 
 // src/runtime/chat-participant.ts
 var vscode2 = __toESM(require("vscode"));
@@ -16828,7 +16829,7 @@ var WorkflowNodeRunError = class extends Error {
 };
 async function runWorkflowNode(args) {
   const { deps, node, userText = "", history = [] } = args;
-  const eventId = (0, import_ulid3.ulid)();
+  const eventId = args.eventId ?? (0, import_ulid3.ulid)();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
   let outputSequence = 0;
@@ -16940,6 +16941,9 @@ async function runWorkflowNode(args) {
   } catch (err) {
     await flushOutput(true);
     const message = err instanceof Error ? err.message : String(err);
+    if (args.isCancelled?.()) {
+      throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
+    }
     if (inputTokenCount && model) {
       await recordUsage({
         deps,
@@ -17314,6 +17318,21 @@ var DEFAULT_BLOCKED_TOOL_NAMES = [
   "update_plan",
   "execution_subagent"
 ];
+var DEFAULT_BACKGROUND_BLOCKED_TOOL_NAMES = [
+  "run_in_terminal",
+  "send_to_terminal",
+  "kill_terminal",
+  "create_and_run_task",
+  "run_task",
+  "run_vscode_command",
+  "install_extension",
+  "install_python_packages",
+  "mcp_com_monday_mo_*create*",
+  "mcp_com_monday_mo_*update*",
+  "mcp_com_monday_mo_*change*",
+  "mcp_com_monday_mo_*delete*",
+  "mcp_com_monday_mo_*move*"
+];
 var PRIORITY_TOOL_PREFIXES = [
   "read_",
   "grep_",
@@ -17347,11 +17366,20 @@ function selectExposedTools(tools, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES
   };
 }
 function isBlockedToolName(name, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
-  return new Set(blockedToolNames.map(normalizeToolName)).has(normalizeToolName(name));
+  const normalizedName = normalizeToolName(name);
+  return blockedToolNames.some((blockedName) => matchesToolPattern(normalizedName, normalizeToolName(blockedName)));
+}
+function resolveBackgroundBlockedTools(mode) {
+  return mode === "all" ? [] : DEFAULT_BACKGROUND_BLOCKED_TOOL_NAMES;
 }
 function normalizeToolName(name) {
   const lowerName = name.toLowerCase();
   return lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".") + 1) : lowerName;
+}
+function matchesToolPattern(name, pattern) {
+  if (!pattern.includes("*")) return name === pattern;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`).test(name);
 }
 function clampToolLimit(value) {
   if (!Number.isFinite(value)) return DEFAULT_MAX_TOOLS_PER_REQUEST;
@@ -17663,7 +17691,7 @@ function chatHistoryToRuntimeMessages(ctx) {
   return messages;
 }
 function createVsCodeModelProvider(args) {
-  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest } = args;
+  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest, toolModeNotice } = args;
   return {
     async selectModel(selector) {
       const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
@@ -17686,6 +17714,7 @@ function createVsCodeModelProvider(args) {
           return counts.reduce((sum, count) => sum + count, 0);
         },
         async *sendRequest(messages) {
+          if (toolModeNotice) stream?.progress(toolModeNotice);
           const requestMessages = messages.map(toVsCodeMessage);
           const toolSelection = selectExposedTools(vscode2.lm.tools, blockedTools, maxToolsPerRequest);
           if (toolSelection.capped) {
@@ -17925,6 +17954,20 @@ var Dispatcher = class {
     this.deps = deps;
   }
   inFlight = 0;
+  activeRuns = /* @__PURE__ */ new Map();
+  async stopNode(nodeId) {
+    const active = this.activeRuns.get(nodeId);
+    if (!active) return false;
+    active.stopRequested = true;
+    active.tokenSource.cancel();
+    await this.deps.ledger.append({
+      type: "session.cancelled",
+      node: nodeId,
+      eventId: active.eventId,
+      detail: { reason: "force-stop" }
+    });
+    return true;
+  }
   async fireNode(node, ctx) {
     const config = vscode3.workspace.getConfiguration("vscodeAgentOrchestrator");
     if (!config.get("enabled", true)) {
@@ -17995,9 +18038,16 @@ var Dispatcher = class {
       node.toolRoundLimit,
       config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT2)
     );
-    const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+    const backgroundToolMode = config.get("backgroundToolMode", "safe");
+    const blockedTools = [
+      ...config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]),
+      ...resolveBackgroundBlockedTools(backgroundToolMode)
+    ];
     const maxToolsPerRequest = config.get("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
+    const eventId = (0, import_ulid4.ulid)();
     this.inFlight++;
+    const activeRun = { eventId, tokenSource, stopRequested: false };
+    this.activeRuns.set(node.id, activeRun);
     try {
       await runWorkflowNode({
         deps: {
@@ -18010,10 +18060,13 @@ var Dispatcher = class {
             token: tokenSource.token,
             toolRoundLimit,
             blockedTools,
-            maxToolsPerRequest
+            maxToolsPerRequest,
+            toolModeNotice: backgroundToolMode === "safe" ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Use native chat dispatch or set vscodeAgentOrchestrator.backgroundToolMode to all for those tools." : void 0
           })
         },
         node,
+        eventId,
+        isCancelled: () => tokenSource.token.isCancellationRequested,
         userText: formatTriggerTag(ctx),
         dryRun,
         source: "dispatcher",
@@ -18021,8 +18074,10 @@ var Dispatcher = class {
         recordOutput: true
       });
     } catch (err) {
+      if (activeRun.stopRequested || tokenSource.token.isCancellationRequested) return;
       await this.handleBackgroundRunError(node, err);
     } finally {
+      if (this.activeRuns.get(node.id) === activeRun) this.activeRuns.delete(node.id);
       tokenSource.dispose();
       this.inFlight = Math.max(0, this.inFlight - 1);
     }
@@ -19107,6 +19162,11 @@ var GraphPanelManager = class {
         this.post(panel, { type: "node.runResult", nodeId: msg.nodeId, ok: r.ok, error: r.error });
         return;
       }
+      case "node.stop": {
+        const result = await this.deps.stopNode(msg.nodeId);
+        this.post(panel, { type: "node.stopResult", nodeId: msg.nodeId, ok: result.ok, error: result.error });
+        return;
+      }
       case "trigger.test": {
         if (msg.workflow) {
           const saveResult = await this.deps.saveWorkflow(msg.workflow);
@@ -19322,7 +19382,7 @@ var NodeChatPanelManager = class {
       } else if (entry.type === 'session.output') {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
         if (typeof entry.content === 'string') output.chunks.push(entry.content);
-        if (output.status !== 'completed' && output.status !== 'errored') output.status = 'running';
+        if (output.status !== 'completed' && output.status !== 'errored' && output.status !== 'cancelled') output.status = 'running';
         output.updatedAt = entry.ts;
       } else if (entry.type === 'session.spawned') {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
@@ -19332,6 +19392,11 @@ var NodeChatPanelManager = class {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
         output.status = 'errored';
         output.error = typeof entry.error === 'string' ? entry.error : 'Session errored.';
+        output.updatedAt = entry.ts;
+      } else if (entry.type === 'session.cancelled') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        output.status = 'cancelled';
+        output.error = 'Run was force-stopped.';
         output.updatedAt = entry.ts;
       }
     }
@@ -19378,7 +19443,7 @@ var NodeChatPanelManager = class {
   }
 };
 function isNodeChatEntry(entry, nodeId) {
-  return entry.node === nodeId && (entry.type === "trigger.fired" || entry.type === "session.output" || entry.type === "session.spawned" || entry.type === "session.errored");
+  return entry.node === nodeId && (entry.type === "trigger.fired" || entry.type === "session.output" || entry.type === "session.spawned" || entry.type === "session.errored" || entry.type === "session.cancelled");
 }
 function nodeSummary(nodeId, node) {
   return { id: nodeId, label: node?.label || nodeId };
@@ -19501,6 +19566,11 @@ async function activate(context) {
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
+    },
+    stopNode: async (nodeId) => {
+      if (!dispatcher) return { ok: false, error: "Not initialized." };
+      const stopped = await dispatcher.stopNode(nodeId);
+      return stopped ? { ok: true } : { ok: false, error: `Node ${nodeId} is not currently running.` };
     },
     testTrigger: async (nodeId) => {
       if (!store || !dispatcher || !bus || !ledger) return { ok: false, error: "Not initialized." };

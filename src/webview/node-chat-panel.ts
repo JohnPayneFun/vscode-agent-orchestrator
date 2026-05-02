@@ -167,7 +167,7 @@ export class NodeChatPanelManager {
       } else if (entry.type === 'session.output') {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
         if (typeof entry.content === 'string') output.chunks.push(entry.content);
-        if (output.status !== 'completed' && output.status !== 'errored') output.status = 'running';
+        if (output.status !== 'completed' && output.status !== 'errored' && output.status !== 'cancelled') output.status = 'running';
         output.updatedAt = entry.ts;
       } else if (entry.type === 'session.spawned') {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
@@ -177,6 +177,11 @@ export class NodeChatPanelManager {
         const output = ensureOutput(entry.eventId, entry.ts, byEvent);
         output.status = 'errored';
         output.error = typeof entry.error === 'string' ? entry.error : 'Session errored.';
+        output.updatedAt = entry.ts;
+      } else if (entry.type === 'session.cancelled') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        output.status = 'cancelled';
+        output.error = 'Run was force-stopped.';
         output.updatedAt = entry.ts;
       }
     }
@@ -228,7 +233,8 @@ function isNodeChatEntry(entry: LedgerEntry, nodeId: string): boolean {
     entry.type === "trigger.fired" ||
     entry.type === "session.output" ||
     entry.type === "session.spawned" ||
-    entry.type === "session.errored"
+    entry.type === "session.errored" ||
+    entry.type === "session.cancelled"
   );
 }
 

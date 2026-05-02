@@ -17,7 +17,7 @@ import { LedgerPanel } from "./LedgerPanel.js";
 type View = "graph" | "json";
 
 export interface NodeActivity {
-  status: "idle" | "queued" | "running" | "completed" | "errored" | "blocked";
+  status: "idle" | "queued" | "running" | "completed" | "errored" | "blocked" | "cancelled";
   label: string;
   detail: string;
   ts?: string;
@@ -58,7 +58,7 @@ interface WorkflowToolUsage {
 
 interface NodeRunOutput {
   eventId: string;
-  status: "running" | "completed" | "errored";
+  status: "running" | "completed" | "errored" | "cancelled";
   chunks: string[];
   startedAt?: string;
   updatedAt?: string;
@@ -142,6 +142,10 @@ export function App(): JSX.Element {
           setStatus(msg.ok ? `Ran node ${msg.nodeId}.` : `Run failed: ${msg.error}`);
           window.setTimeout(() => setStatus(""), 2000);
           break;
+        case "node.stopResult":
+          setStatus(msg.ok ? `Stopped node ${msg.nodeId}.` : `Stop failed: ${msg.error}`);
+          window.setTimeout(() => setStatus(""), 2500);
+          break;
         case "trigger.testResult":
           setStatus(msg.ok ? `Validation trigger sent to ${msg.nodeId}.` : `Validation failed: ${msg.error}`);
           window.setTimeout(() => setStatus(""), 2500);
@@ -222,6 +226,12 @@ export function App(): JSX.Element {
     selectNode(id);
     setRunOutputFocusRequest((request) => request + 1);
     send({ type: "node.openChat", nodeId: id, workflow });
+  };
+
+  const forceStopNode = (id: string): void => {
+    selectNode(id);
+    setStatus(`Stopping ${id}...`);
+    send({ type: "node.stop", nodeId: id });
   };
 
   const updateNode = (next: WorkflowNode): void => {
@@ -337,6 +347,7 @@ export function App(): JSX.Element {
             onSelectNode={selectNode}
             onSelectEdge={selectEdge}
             onViewNodeChat={openNodeChat}
+            onForceStopNode={forceStopNode}
             onClearSelection={clearSelection}
             onMove={moveNode}
             onAddEdge={addEdge}
@@ -664,7 +675,7 @@ function buildNodeRunOutput(workflow: Workflow, entries: LedgerEntry[]): Record<
     if (entry.type === "session.output") {
       const output = ensureOutput(node, eventId, entry.ts);
       if (typeof entry.content === "string") output.chunks.push(entry.content);
-      if (output.status !== "completed" && output.status !== "errored") output.status = "running";
+      if (output.status !== "completed" && output.status !== "errored" && output.status !== "cancelled") output.status = "running";
       output.updatedAt = entry.ts;
       touchLatest(node, output);
       continue;
@@ -680,6 +691,14 @@ function buildNodeRunOutput(workflow: Workflow, entries: LedgerEntry[]): Record<
       const output = ensureOutput(node, eventId, entry.ts);
       output.status = "errored";
       output.error = typeof entry.error === "string" ? entry.error : "Session errored.";
+      output.updatedAt = entry.ts;
+      touchLatest(node, output);
+      continue;
+    }
+    if (entry.type === "session.cancelled") {
+      const output = ensureOutput(node, eventId, entry.ts);
+      output.status = "cancelled";
+      output.error = "Run was force-stopped.";
       output.updatedAt = entry.ts;
       touchLatest(node, output);
     }
@@ -803,6 +822,18 @@ function activityFromEntry(
           status: "errored",
           label: "Errored",
           detail: typeof entry.error === "string" ? entry.error : "Session errored.",
+          ts: entry.ts,
+          eventId
+        }
+      };
+    case "session.cancelled":
+      if (!node || !nodeIds.has(node)) return null;
+      return {
+        nodeId: node,
+        activity: {
+          status: "cancelled",
+          label: "Stopped",
+          detail: "Run was force-stopped.",
           ts: entry.ts,
           eventId
         }

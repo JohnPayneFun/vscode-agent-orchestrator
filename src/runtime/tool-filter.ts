@@ -3,6 +3,7 @@ export interface ToolInfo {
 }
 
 export const DEFAULT_MAX_TOOLS_PER_REQUEST = 128;
+export type BackgroundToolMode = "safe" | "all";
 
 export const DEFAULT_BLOCKED_TOOL_NAMES = [
   "copilot_createfile",
@@ -15,6 +16,22 @@ export const DEFAULT_BLOCKED_TOOL_NAMES = [
   "todo_write",
   "update_plan",
   "execution_subagent"
+] as const;
+
+export const DEFAULT_BACKGROUND_BLOCKED_TOOL_NAMES = [
+  "run_in_terminal",
+  "send_to_terminal",
+  "kill_terminal",
+  "create_and_run_task",
+  "run_task",
+  "run_vscode_command",
+  "install_extension",
+  "install_python_packages",
+  "mcp_com_monday_mo_*create*",
+  "mcp_com_monday_mo_*update*",
+  "mcp_com_monday_mo_*change*",
+  "mcp_com_monday_mo_*delete*",
+  "mcp_com_monday_mo_*move*"
 ] as const;
 
 const PRIORITY_TOOL_PREFIXES = [
@@ -78,12 +95,23 @@ export function isBlockedToolName(
   name: string,
   blockedToolNames: readonly string[] = DEFAULT_BLOCKED_TOOL_NAMES
 ): boolean {
-  return new Set(blockedToolNames.map(normalizeToolName)).has(normalizeToolName(name));
+  const normalizedName = normalizeToolName(name);
+  return blockedToolNames.some((blockedName) => matchesToolPattern(normalizedName, normalizeToolName(blockedName)));
+}
+
+export function resolveBackgroundBlockedTools(mode: BackgroundToolMode): readonly string[] {
+  return mode === "all" ? [] : DEFAULT_BACKGROUND_BLOCKED_TOOL_NAMES;
 }
 
 function normalizeToolName(name: string): string {
   const lowerName = name.toLowerCase();
   return lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".") + 1) : lowerName;
+}
+
+function matchesToolPattern(name: string, pattern: string): boolean {
+  if (!pattern.includes("*")) return name === pattern;
+  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`).test(name);
 }
 
 function clampToolLimit(value: number): number {

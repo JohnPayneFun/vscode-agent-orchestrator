@@ -133,6 +133,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         return { ok: false, error: err instanceof Error ? err.message : String(err) };
       }
     },
+    stopNode: async (nodeId: string) => {
+      if (!dispatcher) return { ok: false, error: "Not initialized." };
+      const stopped = await dispatcher.stopNode(nodeId);
+      return stopped ? { ok: true } : { ok: false, error: `Node ${nodeId} is not currently running.` };
+    },
     testTrigger: async (nodeId: string) => {
       if (!store || !dispatcher || !bus || !ledger) return { ok: false, error: "Not initialized." };
       const wf = store.get();

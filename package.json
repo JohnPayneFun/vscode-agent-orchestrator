@@ -121,6 +121,15 @@
           "maximum": 128,
           "description": "Maximum number of tools to advertise to the model in a single request. VS Code currently rejects requests with more than 128 tools, so this cannot be unlimited."
         },
+        "vscodeAgentOrchestrator.backgroundToolMode": {
+          "type": "string",
+          "default": "safe",
+          "enum": [
+            "safe",
+            "all"
+          ],
+          "description": "Tool exposure policy for background extension-host runs. safe hides confirmation-heavy tools such as terminal commands and Monday.com mutations to avoid modal permission popups; all exposes every tool allowed by blockedTools and maxToolsPerRequest. Native chat dispatch still shows tool confirmations inline."
+        },
         "vscodeAgentOrchestrator.blockedTools": {
           "type": "array",
           "default": [
@@ -138,7 +147,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Registered language-model tool names to hide from orchestrated node runs. Set to [] to expose all native tools. Matching is case-insensitive and also handles namespaced names such as functions.manage_todo_list."
+          "description": "Registered language-model tool names or wildcard patterns to hide from orchestrated node runs. Set to [] to expose all native tools allowed by the active tool mode. Matching is case-insensitive and also handles namespaced names such as functions.manage_todo_list."
         }
       }
     }

@@ -60,6 +60,8 @@ export interface RunWorkflowNodeArgs {
   dryRun?: boolean;
   source?: string;
   spawner?: string;
+  eventId?: string;
+  isCancelled?: () => boolean;
   recordOutput?: boolean;
   onMarkdown?: (markdown: string) => void | Promise<void>;
 }
@@ -102,7 +104,7 @@ type OutgoingHandoff = {
 
 export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWorkflowNodeResult> {
   const { deps, node, userText = "", history = [] } = args;
-  const eventId = ulid();
+  const eventId = args.eventId ?? ulid();
   const source = args.source ?? "direct";
   const spawner = args.spawner ?? "node-runner";
   let outputSequence = 0;
@@ -220,6 +222,9 @@ export async function runWorkflowNode(args: RunWorkflowNodeArgs): Promise<RunWor
   } catch (err) {
     await flushOutput(true);
     const message = err instanceof Error ? err.message : String(err);
+    if (args.isCancelled?.()) {
+      throw new WorkflowNodeRunError(message, { cause: err, eventId, drainedHandoffs: drained, cleanedUserText, triggerType });
+    }
     if (inputTokenCount && model) {
       await recordUsage({
         deps,

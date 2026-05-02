@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exposedTools, isBlockedToolName, selectExposedTools } from "../src/runtime/tool-filter.js";
+import { exposedTools, isBlockedToolName, resolveBackgroundBlockedTools, selectExposedTools } from "../src/runtime/tool-filter.js";
 
 test("tool filter blocks Copilot file mutation tools", () => {
   assert.equal(isBlockedToolName("copilot_createFile"), true);
@@ -44,6 +44,20 @@ test("tool filter accepts a custom blocklist", () => {
   ], ["read_file"]);
 
   assert.deepEqual(tools.map((tool) => tool.name), ["manage_todo_list"]);
+});
+
+test("tool filter accepts wildcard block patterns", () => {
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_update_doc", ["mcp_com_monday_mo_update*"]), true);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_change_column_value", ["mcp_com_monday_mo_*change*"]), true);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_get_assets", ["mcp_com_monday_mo_update*"]), false);
+});
+
+test("background safe mode blocks confirmation-heavy tools", () => {
+  const blocked = resolveBackgroundBlockedTools("safe");
+  assert.equal(isBlockedToolName("run_in_terminal", blocked), true);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_create_update", blocked), true);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_get_assets", blocked), false);
+  assert.deepEqual(resolveBackgroundBlockedTools("all"), []);
 });
 
 test("tool filter caps advertised tools before model requests", () => {

@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { ulid } from "ulid";
 import type { Workflow, WorkflowNode, TriggerType } from "../../shared/types.js";
 import type { Ledger } from "../orchestration/ledger.js";
 import type { MessageBus } from "../orchestration/message-bus.js";
@@ -7,7 +8,12 @@ import { createVsCodeModelProvider, resolveToolRoundLimit } from "./chat-partici
 import { scheduledDispatchDownstreamState } from "./downstream-state.js";
 import { runWorkflowNode, WorkflowNodeRunError } from "./node-runner.js";
 import { saveRetryState } from "./retry-state.js";
-import { DEFAULT_BLOCKED_TOOL_NAMES, DEFAULT_MAX_TOOLS_PER_REQUEST } from "./tool-filter.js";
+import {
+  DEFAULT_BLOCKED_TOOL_NAMES,
+  DEFAULT_MAX_TOOLS_PER_REQUEST,
+  resolveBackgroundBlockedTools,
+  type BackgroundToolMode
+} from "./tool-filter.js";
 import { parseUsageLimitRetry } from "./usage-limit.js";
 
 export interface DispatchContext {
@@ -28,6 +34,12 @@ const CHAT_PARTICIPANT_NAME = "@orchestrator";
 const DEFAULT_TOOL_ROUND_LIMIT = 64;
 const TOOL_ROUND_LIMIT_RE = /tool round limit|Stopped after \d+ tool round/i;
 
+interface ActiveBackgroundRun {
+  eventId: string;
+  tokenSource: vscode.CancellationTokenSource;
+  stopRequested: boolean;
+}
+
 /**
  * Dispatches trigger/graph work to a node. By default this runs inside the
  * extension host via VS Code's Language Model API instead of opening chat UI,
@@ -36,8 +48,23 @@ const TOOL_ROUND_LIMIT_RE = /tool round limit|Stopped after \d+ tool round/i;
  */
 export class Dispatcher {
   private inFlight = 0;
+  private readonly activeRuns = new Map<string, ActiveBackgroundRun>();
 
   constructor(private readonly deps: DispatcherDeps) {}
+
+  async stopNode(nodeId: string): Promise<boolean> {
+    const active = this.activeRuns.get(nodeId);
+    if (!active) return false;
+    active.stopRequested = true;
+    active.tokenSource.cancel();
+    await this.deps.ledger.append({
+      type: "session.cancelled",
+      node: nodeId,
+      eventId: active.eventId,
+      detail: { reason: "force-stop" }
+    });
+    return true;
+  }
 
   async fireNode(node: WorkflowNode, ctx: DispatchContext): Promise<void> {
     const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
@@ -115,10 +142,17 @@ export class Dispatcher {
       node.toolRoundLimit,
       config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT)
     );
-    const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+    const backgroundToolMode = config.get<BackgroundToolMode>("backgroundToolMode", "safe");
+    const blockedTools = [
+      ...config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]),
+      ...resolveBackgroundBlockedTools(backgroundToolMode)
+    ];
     const maxToolsPerRequest = config.get<number>("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
+    const eventId = ulid();
 
     this.inFlight++;
+    const activeRun: ActiveBackgroundRun = { eventId, tokenSource, stopRequested: false };
+    this.activeRuns.set(node.id, activeRun);
     try {
       await runWorkflowNode({
         deps: {
@@ -131,10 +165,15 @@ export class Dispatcher {
             token: tokenSource.token,
             toolRoundLimit,
             blockedTools,
-            maxToolsPerRequest
+            maxToolsPerRequest,
+            toolModeNotice: backgroundToolMode === "safe"
+              ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Use native chat dispatch or set vscodeAgentOrchestrator.backgroundToolMode to all for those tools."
+              : undefined
           })
         },
         node,
+        eventId,
+        isCancelled: () => tokenSource.token.isCancellationRequested,
         userText: formatTriggerTag(ctx),
         dryRun,
         source: "dispatcher",
@@ -142,8 +181,10 @@ export class Dispatcher {
         recordOutput: true
       });
     } catch (err) {
+      if (activeRun.stopRequested || tokenSource.token.isCancellationRequested) return;
       await this.handleBackgroundRunError(node, err);
     } finally {
+      if (this.activeRuns.get(node.id) === activeRun) this.activeRuns.delete(node.id);
       tokenSource.dispose();
       this.inFlight = Math.max(0, this.inFlight - 1);
     }

@@ -31,6 +31,7 @@ interface Props {
   onSelectNode: (id: string | null) => void;
   onSelectEdge: (id: string | null) => void;
   onViewNodeChat: (id: string) => void;
+  onForceStopNode: (id: string) => void;
   onClearSelection: () => void;
   onMove: (id: string, x: number, y: number) => void;
   onAddEdge: (from: string, to: string) => void;
@@ -152,6 +153,7 @@ function GraphViewInner({
   onSelectNode,
   onSelectEdge,
   onViewNodeChat,
+  onForceStopNode,
   onClearSelection,
   onMove,
   onAddEdge,
@@ -243,7 +245,7 @@ function GraphViewInner({
       const flowNode = node as FlowNode;
       onSelectNode(flowNode.id);
       const menuWidth = 168;
-      const menuHeight = 48;
+      const menuHeight = 88;
       setContextMenu({
         nodeId: flowNode.id,
         label: flowNode.data.wfNode.label || flowNode.id,
@@ -259,6 +261,12 @@ function GraphViewInner({
     onViewNodeChat(contextMenu.nodeId);
     setContextMenu(null);
   }, [contextMenu, onViewNodeChat]);
+
+  const forceStopContextNode = useCallback(() => {
+    if (!contextMenu) return;
+    onForceStopNode(contextMenu.nodeId);
+    setContextMenu(null);
+  }, [contextMenu, onForceStopNode]);
 
   return (
     <div className="graph-view-root">
@@ -314,6 +322,7 @@ function GraphViewInner({
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
           <button type="button" role="menuitem" onClick={viewContextNodeChat}>Open chat window</button>
+          <button type="button" role="menuitem" className="danger" onClick={forceStopContextNode}>Force stop</button>
         </div>
       ) : null}
     </div>
@@ -340,6 +349,8 @@ function activityColor(status: NodeActivity["status"]): string {
     case "errored":
     case "blocked":
       return "#f85149";
+    case "cancelled":
+      return "#8b949e";
     case "idle":
     default:
       return "#3794ff";
