@@ -12,6 +12,8 @@ import { registerChatParticipant } from "./runtime/chat-participant.js";
 import { retryQuery, scheduleRetryChat } from "./runtime/retry-chat.js";
 import { listRetryStates } from "./runtime/retry-state.js";
 import { GraphPanelManager } from "./webview/panel.js";
+import { NodeChatPanelManager } from "./webview/node-chat-panel.js";
+import type { Workflow } from "../shared/types.js";
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("Agent Orchestrator");
@@ -36,6 +38,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     : null;
   const triggers =
     dispatcher && p && bus ? new TriggerRegistry(dispatcher, p, bus, output) : null;
+  const nodeChatPanels = store && ledger
+    ? new NodeChatPanelManager(context, {
+        loadWorkflow: async () => store.load(),
+        tailLedger: async () => ledger.tail(2000),
+        onLedgerEntry: (cb) => ledger.onAppend(cb)
+      })
+    : null;
 
   if (store) {
     await store.load();
@@ -99,6 +108,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     detectSourceControl: async () => detectSourceControl(root),
     getAgentInstructions: async (agentId: string) => (await getAgent(root, agentId))?.instructions ?? null,
+    openNodeChat: async (nodeId: string, workflow?: Workflow) => {
+      if (!nodeChatPanels) return { ok: false, error: "Not initialized." };
+      try {
+        await nodeChatPanels.open(nodeId, workflow);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
     runNode: async (nodeId: string) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };
       const wf = store.get();
@@ -187,6 +205,23 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       } catch (err) {
         vscode.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
       }
+    }),
+    vscode.commands.registerCommand("vscodeAgentOrchestrator.openNodeChat", async () => {
+      if (!store || !nodeChatPanels) {
+        vscode.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
+        return;
+      }
+      const wf = store.get();
+      if (!wf || wf.nodes.length === 0) {
+        vscode.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
+        return;
+      }
+      const choice = await vscode.window.showQuickPick(
+        wf.nodes.map((n) => ({ label: n.label, description: n.id, node: n })),
+        { placeHolder: "Pick a node transcript to open" }
+      );
+      if (!choice) return;
+      await nodeChatPanels.open(choice.node.id, wf);
     }),
     vscode.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
       if (!p) return;

@@ -83,7 +83,7 @@ Example chat commands:
 
 Watch the graph activity, selected-node **Run Output** panel, and ledger panel. For deeper inspection, run **Agent Orchestrator: Tail Ledger** to open `.agent-orchestrator/ledger.jsonl`.
 
-Right-click a graph node and choose **View chat** to select that node and jump straight to its latest captured background transcript.
+Right-click a graph node and choose **Open chat window** to open a dedicated editor tab for that node's latest captured background transcript. The side-panel **Open chat** button does the same thing.
 
 ### 5. MCP and tools
 
@@ -212,9 +212,9 @@ Each completed or errored node run writes a `usage.recorded` ledger entry. VS Co
 
 Runs that use tools also write `toolUsage.recorded` ledger entries with total calls, tool rounds, failures, the applied limit, whether the cap was reached, and a per-tool breakdown. The graph editor shows total tool calls in the toolbar, workflow-level tool totals, and per-node tool usage when a node is selected.
 
-Background runs write `session.output` ledger entries as text is produced. Select a node in the graph to see the latest captured background transcript in the **Run Output** panel. Manual `@orchestrator` chat runs still stream in native VS Code Chat.
+Background runs write `session.output` ledger entries as text is produced. Select a node in the graph to see the latest captured background transcript in the **Run Output** panel. Use **Open chat** to pop that transcript into a full editor tab that updates live. Manual `@orchestrator` chat runs still stream in native VS Code Chat.
 
-You can also right-click a node and choose **View chat** to focus that transcript directly.
+VS Code does not currently expose a supported API for extensions to inject arbitrary background-run messages into native Chat tabs. Set `vscodeAgentOrchestrator.dispatchMode` to `chat` when you specifically want trigger dispatch to use the native Chat panel instead of background execution.
 
 ## Quick start
 
@@ -295,6 +295,7 @@ Hooks run from the workspace root. `beforeRun` failures fail the attempt; `after
 |---|---|
 | Agent Orchestrator: Open Graph Editor | Webview with React Flow canvas + JSON view + ledger tail |
 | Agent Orchestrator: Run Node Manually | Quick-pick a node and dispatch it |
+| Agent Orchestrator: Open Node Chat Window | Quick-pick a node and open its live transcript tab |
 | Agent Orchestrator: Tail Ledger | Open `ledger.jsonl` for review |
 | Agent Orchestrator: Emergency Stop | Disable all triggers and set the global enabled flag to false |
 

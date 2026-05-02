@@ -21,6 +21,7 @@ button {
 button:hover { background: var(--vscode-button-hoverBackground); }
 button.secondary { background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
 button.danger { background: #b32; color: white; }
+button.compact { padding: 2px 7px; font-size: 11px; }
 
 input, select, textarea {
   background: var(--vscode-input-background);
@@ -142,6 +143,9 @@ textarea { font-family: var(--vscode-editor-font-family); resize: vertical; }
   overflow: auto;
 }
 .side-panel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
+.side-panel .panel-heading-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.side-panel .panel-heading-row h3 { margin: 0; }
+.side-panel .panel-heading-row button { margin-left: auto; flex: 0 0 auto; }
 .side-panel label { display: block; margin: 8px 0 4px; font-size: 11px; opacity: 0.85; }
 .side-panel .field-note { margin: 6px 0 0; font-size: 11px; opacity: 0.72; line-height: 1.35; }
 .side-panel .usage-total { font-size: 18px; font-weight: 650; line-height: 1.2; }

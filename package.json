@@ -44,6 +44,10 @@
         "title": "Agent Orchestrator: Run Node Manually"
       },
       {
+        "command": "vscodeAgentOrchestrator.openNodeChat",
+        "title": "Agent Orchestrator: Open Node Chat Window"
+      },
+      {
         "command": "vscodeAgentOrchestrator.tailLedger",
         "title": "Agent Orchestrator: Tail Ledger"
       },

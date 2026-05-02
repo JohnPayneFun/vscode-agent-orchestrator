@@ -235,6 +235,7 @@ export type WebviewToExt =
   | { type: "agents.requestList" }
   | { type: "models.requestList" }
   | { type: "sourceControl.request" }
+  | { type: "node.openChat"; nodeId: string; workflow?: Workflow }
   | { type: "node.run"; nodeId: string; workflow?: Workflow }
   | { type: "ledger.tail" }
   | { type: "trigger.test"; nodeId: string; workflow?: Workflow };

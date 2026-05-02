@@ -218,9 +218,10 @@ export function App(): JSX.Element {
     setSelectedEdgeId(null);
   };
 
-  const viewNodeChat = (id: string): void => {
+  const openNodeChat = (id: string): void => {
     selectNode(id);
     setRunOutputFocusRequest((request) => request + 1);
+    send({ type: "node.openChat", nodeId: id, workflow });
   };
 
   const updateNode = (next: WorkflowNode): void => {
@@ -335,7 +336,7 @@ export function App(): JSX.Element {
             selectedEdgeId={selectedEdgeId}
             onSelectNode={selectNode}
             onSelectEdge={selectEdge}
-            onViewNodeChat={viewNodeChat}
+            onViewNodeChat={openNodeChat}
             onClearSelection={clearSelection}
             onMove={moveNode}
             onAddEdge={addEdge}
@@ -359,7 +360,11 @@ export function App(): JSX.Element {
               onDelete={() => deleteNode(selectedNode.id)}
             />
             <NodeActivityPanel activity={selectedActivity} />
-            <NodeRunOutputPanel output={selectedRunOutput} panelRef={runOutputPanelRef} />
+            <NodeRunOutputPanel
+              output={selectedRunOutput}
+              panelRef={runOutputPanelRef}
+              onOpenChat={() => openNodeChat(selectedNode.id)}
+            />
             <NodeUsagePanel usage={selectedUsage ?? emptyUsage()} />
             <NodeToolUsagePanel usage={selectedToolUsage ?? emptyToolUsage()} />
           </>
@@ -422,11 +427,22 @@ export function App(): JSX.Element {
   );
 }
 
-function NodeRunOutputPanel({ output, panelRef }: { output: NodeRunOutput | null; panelRef?: React.Ref<HTMLDivElement> }): JSX.Element {
+function NodeRunOutputPanel({
+  output,
+  panelRef,
+  onOpenChat
+}: {
+  output: NodeRunOutput | null;
+  panelRef?: React.Ref<HTMLDivElement>;
+  onOpenChat: () => void;
+}): JSX.Element {
   const text = output?.chunks.join("") ?? "";
   return (
     <div ref={panelRef} className="activity-panel run-output-panel" tabIndex={-1}>
-      <h3>Run Output</h3>
+      <div className="panel-heading-row">
+        <h3>Run Output</h3>
+        <button type="button" className="secondary compact" onClick={onOpenChat}>Open chat</button>
+      </div>
       {output ? (
         <>
           <p className="field-note">

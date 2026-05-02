@@ -593,6 +593,10 @@ button.danger {
   background: #b32;
   color: white;
 }
+button.compact {
+  padding: 2px 7px;
+  font-size: 11px;
+}
 input,
 select,
 textarea {
@@ -715,6 +719,19 @@ textarea {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   opacity: 0.7;
+}
+.side-panel .panel-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.side-panel .panel-heading-row h3 {
+  margin: 0;
+}
+.side-panel .panel-heading-row button {
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 .side-panel label {
   display: block;

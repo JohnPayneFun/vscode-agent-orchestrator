@@ -16012,15 +16012,15 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode9 = __toESM(require("vscode"));
+var vscode10 = __toESM(require("vscode"));
 
 // src/orchestration/paths.ts
 var path = __toESM(require("path"));
 var fs = __toESM(require("fs"));
 function workspaceRoot() {
   const moduleName = "vscode";
-  const vscode10 = require(moduleName);
-  const folder = vscode10.workspace.workspaceFolders?.[0];
+  const vscode11 = require(moduleName);
+  const folder = vscode11.workspace.workspaceFolders?.[0];
   return folder?.uri.fsPath;
 }
 function paths(root) {
@@ -19082,6 +19082,13 @@ var GraphPanelManager = class {
         this.post(panel, { type: "sourceControl.detected", sourceControl });
         return;
       }
+      case "node.openChat": {
+        const result = await this.deps.openNodeChat(msg.nodeId, msg.workflow);
+        if (!result.ok) {
+          this.post(panel, { type: "toast", level: "error", message: result.error ?? "Could not open node chat." });
+        }
+        return;
+      }
       case "node.run": {
         if (msg.workflow) {
           const saveResult = await this.deps.saveWorkflow(msg.workflow);
@@ -19168,9 +19175,227 @@ function randomNonce() {
   return n;
 }
 
+// src/webview/node-chat-panel.ts
+var vscode9 = __toESM(require("vscode"));
+var NodeChatPanelManager = class {
+  constructor(context, deps) {
+    this.context = context;
+    this.deps = deps;
+  }
+  panels = /* @__PURE__ */ new Map();
+  async open(nodeId, workflow) {
+    const existing = this.panels.get(nodeId);
+    if (existing) {
+      existing.panel.reveal(vscode9.ViewColumn.Beside);
+      return;
+    }
+    const activeWorkflow = workflow ?? await this.deps.loadWorkflow();
+    const node = activeWorkflow.nodes.find((candidate) => candidate.id === nodeId);
+    const label = node?.label || nodeId;
+    const panel = vscode9.window.createWebviewPanel(
+      "agentOrchestratorNodeChat",
+      `${label} Chat`,
+      vscode9.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true
+      }
+    );
+    panel.iconPath = new vscode9.ThemeIcon("comment-discussion");
+    panel.webview.html = this.renderHtml(panel.webview, nodeId, label);
+    const postInitialState = async () => {
+      const entries = (await this.deps.tailLedger()).filter((entry) => isNodeChatEntry(entry, nodeId));
+      this.post(panel, {
+        type: "init",
+        node: nodeSummary(nodeId, node),
+        entries
+      });
+    };
+    panel.webview.onDidReceiveMessage((message) => {
+      if (message.type === "ready") void postInitialState();
+    });
+    const disposeLedger = this.deps.onLedgerEntry((entry) => {
+      if (isNodeChatEntry(entry, nodeId)) this.post(panel, { type: "ledger.append", entry });
+    });
+    this.panels.set(nodeId, { panel, disposeLedger });
+    panel.onDidDispose(() => {
+      disposeLedger();
+      this.panels.delete(nodeId);
+    });
+  }
+  post(panel, message) {
+    void panel.webview.postMessage(message);
+  }
+  renderHtml(webview, nodeId, label) {
+    const nonce = randomNonce2();
+    const csp = [
+      `default-src 'none';`,
+      `style-src ${webview.cspSource} 'unsafe-inline';`,
+      `script-src 'nonce-${nonce}';`,
+      `font-src ${webview.cspSource};`
+    ].join(" ");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<title>${escapeHtml(label)} Chat</title>
+<style>
+  :root { color-scheme: dark light; }
+  html, body { height: 100%; margin: 0; padding: 0; background: var(--vscode-editor-background); color: var(--vscode-editor-foreground, var(--vscode-foreground)); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
+  body { overflow: hidden; }
+  .shell { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+  .header { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--vscode-editorWidget-border, transparent); background: var(--vscode-editorWidget-background); }
+  .title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-id { color: var(--vscode-descriptionForeground, var(--vscode-foreground)); font-size: 11px; }
+  .status { margin-left: auto; padding: 2px 7px; border-radius: 3px; font-size: 11px; text-transform: capitalize; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+  .status.running { background: var(--vscode-charts-blue, #3794ff); color: #fff; }
+  .status.completed { background: var(--vscode-charts-green, #3fb950); color: #fff; }
+  .status.errored { background: var(--vscode-errorForeground, #f85149); color: #fff; }
+  .content { overflow: auto; padding: 18px; }
+  .chat-card { max-width: 980px; margin: 0 auto; border: 1px solid var(--vscode-editorWidget-border, transparent); background: var(--vscode-sideBar-background, var(--vscode-editorWidget-background)); border-radius: 6px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 12px; border-bottom: 1px solid var(--vscode-editorWidget-border, transparent); color: var(--vscode-descriptionForeground, var(--vscode-foreground)); font-size: 11px; }
+  .transcript { margin: 0; min-height: 420px; padding: 16px; white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family); font-size: var(--vscode-editor-font-size); line-height: 1.5; }
+  .empty { color: var(--vscode-descriptionForeground, var(--vscode-foreground)); font-style: italic; }
+  .runs { max-width: 980px; margin: 12px auto 0; color: var(--vscode-descriptionForeground, var(--vscode-foreground)); font-size: 11px; }
+  .runs ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+  .runs li { display: flex; gap: 8px; align-items: center; overflow: hidden; }
+  code { font-family: var(--vscode-editor-font-family); font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="header">
+    <div class="title" id="title">${escapeHtml(label)} Chat</div>
+    <div class="node-id"><code>${escapeHtml(nodeId)}</code></div>
+    <div class="status" id="status">Waiting</div>
+  </div>
+  <main class="content">
+    <section class="chat-card">
+      <div class="meta" id="meta">Loading transcript...</div>
+      <pre class="transcript empty" id="transcript">Loading transcript...</pre>
+    </section>
+    <section class="runs" id="runs"></section>
+  </main>
+</div>
+<script nonce="${nonce}">
+  const vscode = acquireVsCodeApi();
+  const state = { node: { id: ${JSON.stringify(nodeId)}, label: ${JSON.stringify(label)} }, entries: [] };
+  const title = document.getElementById('title');
+  const status = document.getElementById('status');
+  const meta = document.getElementById('meta');
+  const transcript = document.getElementById('transcript');
+  const runs = document.getElementById('runs');
+
+  window.addEventListener('message', (event) => {
+    const message = event.data || {};
+    if (message.type === 'init') {
+      state.node = message.node || state.node;
+      state.entries = Array.isArray(message.entries) ? message.entries : [];
+      render();
+      return;
+    }
+    if (message.type === 'ledger.append' && message.entry) {
+      state.entries.push(message.entry);
+      if (state.entries.length > 2000) state.entries = state.entries.slice(-2000);
+      render(true);
+    }
+  });
+
+  function ensureOutput(eventId, ts, byEvent) {
+    let output = byEvent.get(eventId);
+    if (!output) {
+      output = { eventId, status: 'running', chunks: [], startedAt: ts, updatedAt: ts };
+      byEvent.set(eventId, output);
+    }
+    return output;
+  }
+
+  function buildRuns() {
+    const byEvent = new Map();
+    for (const entry of state.entries) {
+      if (!entry || entry.node !== state.node.id || typeof entry.eventId !== 'string') continue;
+      if (entry.type === 'trigger.fired') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        output.status = 'running';
+        output.updatedAt = entry.ts;
+      } else if (entry.type === 'session.output') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        if (typeof entry.content === 'string') output.chunks.push(entry.content);
+        if (output.status !== 'completed' && output.status !== 'errored') output.status = 'running';
+        output.updatedAt = entry.ts;
+      } else if (entry.type === 'session.spawned') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        output.status = 'completed';
+        output.updatedAt = entry.ts;
+      } else if (entry.type === 'session.errored') {
+        const output = ensureOutput(entry.eventId, entry.ts, byEvent);
+        output.status = 'errored';
+        output.error = typeof entry.error === 'string' ? entry.error : 'Session errored.';
+        output.updatedAt = entry.ts;
+      }
+    }
+    return Array.from(byEvent.values()).sort((left, right) => Date.parse(right.updatedAt || right.startedAt || '') - Date.parse(left.updatedAt || left.startedAt || ''));
+  }
+
+  function shortTime(ts) {
+    const date = new Date(ts);
+    if (Number.isNaN(date.getTime())) return ts || '';
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function render(fromAppend = false) {
+    const label = state.node.label || state.node.id;
+    title.textContent = label + ' Chat';
+    const allRuns = buildRuns();
+    const latest = allRuns[0];
+    if (!latest) {
+      status.textContent = 'Waiting';
+      status.className = 'status';
+      meta.textContent = 'No captured background run yet.';
+      transcript.textContent = 'Run this node from the graph, a trigger, or @orchestrator to capture background output here.';
+      transcript.className = 'transcript empty';
+      runs.textContent = '';
+      return;
+    }
+    const text = latest.chunks.join('') || latest.error || 'No text output captured for this run yet.';
+    status.textContent = latest.status;
+    status.className = 'status ' + latest.status;
+    meta.innerHTML = '<span>Event <code>' + latest.eventId + '</code></span><span>Updated ' + shortTime(latest.updatedAt) + '</span>';
+    transcript.textContent = text;
+    transcript.className = latest.chunks.length || latest.error ? 'transcript' : 'transcript empty';
+    runs.innerHTML = allRuns.length > 1
+      ? '<div>Recent runs</div><ul>' + allRuns.slice(0, 8).map((run) => '<li><code>' + run.eventId + '</code><span>' + run.status + '</span><span>' + shortTime(run.updatedAt) + '</span></li>').join('') + '</ul>'
+      : '';
+    if (fromAppend) transcript.scrollIntoView({ block: 'end' });
+  }
+
+  render();
+  vscode.postMessage({ type: 'ready' });
+</script>
+</body>
+</html>`;
+  }
+};
+function isNodeChatEntry(entry, nodeId) {
+  return entry.node === nodeId && (entry.type === "trigger.fired" || entry.type === "session.output" || entry.type === "session.spawned" || entry.type === "session.errored");
+}
+function nodeSummary(nodeId, node) {
+  return { id: nodeId, label: node?.label || nodeId };
+}
+function escapeHtml(value) {
+  return value.replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[char] ?? char);
+}
+function randomNonce2() {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let nonce = "";
+  for (let index = 0; index < 32; index++) nonce += chars.charAt(Math.floor(Math.random() * chars.length));
+  return nonce;
+}
+
 // src/extension.ts
 async function activate(context) {
-  const output = vscode9.window.createOutputChannel("Agent Orchestrator");
+  const output = vscode10.window.createOutputChannel("Agent Orchestrator");
   context.subscriptions.push(output);
   output.appendLine("Agent Orchestrator activating...");
   const root = workspaceRoot();
@@ -19187,6 +19412,11 @@ async function activate(context) {
     getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null
   }) : null;
   const triggers = dispatcher && p && bus ? new TriggerRegistry(dispatcher, p, bus, output) : null;
+  const nodeChatPanels = store && ledger ? new NodeChatPanelManager(context, {
+    loadWorkflow: async () => store.load(),
+    tailLedger: async () => ledger.tail(2e3),
+    onLedgerEntry: (cb) => ledger.onAppend(cb)
+  }) : null;
   if (store) {
     await store.load();
     await store.writeSchemaCopy().catch(() => void 0);
@@ -19235,7 +19465,7 @@ async function activate(context) {
       }));
     },
     listModels: async () => {
-      const models = await vscode9.lm.selectChatModels();
+      const models = await vscode10.lm.selectChatModels();
       return models.map((model) => ({
         id: model.id,
         name: model.name,
@@ -19247,6 +19477,15 @@ async function activate(context) {
     },
     detectSourceControl: async () => detectSourceControl(root),
     getAgentInstructions: async (agentId) => (await getAgent(root, agentId))?.instructions ?? null,
+    openNodeChat: async (nodeId, workflow) => {
+      if (!nodeChatPanels) return { ok: false, error: "Not initialized." };
+      try {
+        await nodeChatPanels.open(nodeId, workflow);
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
+    },
     runNode: async (nodeId) => {
       if (!store || !dispatcher) return { ok: false, error: "Not initialized." };
       const wf = store.get();
@@ -19311,20 +19550,20 @@ async function activate(context) {
     onLedgerEntry: (cb) => ledger ? ledger.onAppend(cb) : () => void 0
   });
   context.subscriptions.push(
-    vscode9.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
+    vscode10.commands.registerCommand("vscodeAgentOrchestrator.openGraph", () => {
       panel.open();
     }),
-    vscode9.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
+    vscode10.commands.registerCommand("vscodeAgentOrchestrator.runNode", async () => {
       if (!store || !dispatcher) {
-        vscode9.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
+        vscode10.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
         return;
       }
       const wf = store.get();
       if (!wf || wf.nodes.length === 0) {
-        vscode9.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
+        vscode10.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
         return;
       }
-      const choice = await vscode9.window.showQuickPick(
+      const choice = await vscode10.window.showQuickPick(
         wf.nodes.map((n) => ({ label: n.label, description: n.id, node: n })),
         { placeHolder: "Pick a node to fire" }
       );
@@ -19332,18 +19571,35 @@ async function activate(context) {
       try {
         await dispatcher.fireNode(choice.node, { reason: "manual" });
       } catch (err) {
-        vscode9.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
+        vscode10.window.showErrorMessage(`Run failed: ${err instanceof Error ? err.message : err}`);
       }
     }),
-    vscode9.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
-      if (!p) return;
-      const doc = await vscode9.workspace.openTextDocument(vscode9.Uri.file(p.ledgerJsonl));
-      await vscode9.window.showTextDocument(doc, { preview: false });
+    vscode10.commands.registerCommand("vscodeAgentOrchestrator.openNodeChat", async () => {
+      if (!store || !nodeChatPanels) {
+        vscode10.window.showErrorMessage("Agent Orchestrator: open a workspace first.");
+        return;
+      }
+      const wf = store.get();
+      if (!wf || wf.nodes.length === 0) {
+        vscode10.window.showInformationMessage("No nodes defined yet. Open the graph editor and create one.");
+        return;
+      }
+      const choice = await vscode10.window.showQuickPick(
+        wf.nodes.map((n) => ({ label: n.label, description: n.id, node: n })),
+        { placeHolder: "Pick a node transcript to open" }
+      );
+      if (!choice) return;
+      await nodeChatPanels.open(choice.node.id, wf);
     }),
-    vscode9.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
+    vscode10.commands.registerCommand("vscodeAgentOrchestrator.tailLedger", async () => {
+      if (!p) return;
+      const doc = await vscode10.workspace.openTextDocument(vscode10.Uri.file(p.ledgerJsonl));
+      await vscode10.window.showTextDocument(doc, { preview: false });
+    }),
+    vscode10.commands.registerCommand("vscodeAgentOrchestrator.emergencyStop", async () => {
       triggers?.disposeAll();
-      await vscode9.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode9.ConfigurationTarget.Workspace);
-      vscode9.window.showWarningMessage(
+      await vscode10.workspace.getConfiguration("vscodeAgentOrchestrator").update("enabled", false, vscode10.ConfigurationTarget.Workspace);
+      vscode10.window.showWarningMessage(
         "Agent Orchestrator: all triggers stopped and disabled. Re-enable in settings."
       );
     })

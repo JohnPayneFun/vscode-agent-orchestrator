@@ -18,6 +18,7 @@ export interface PanelDeps {
   listModels: () => Promise<ModelOption[]>;
   detectSourceControl: () => Promise<SourceControlInfo>;
   getAgentInstructions: (agentId: string) => Promise<string | null>;
+  openNodeChat: (nodeId: string, workflow?: Workflow) => Promise<{ ok: boolean; error?: string }>;
   runNode: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   testTrigger: (nodeId: string) => Promise<{ ok: boolean; error?: string }>;
   tailLedger: () => Promise<LedgerEntry[]>;
@@ -112,6 +113,13 @@ export class GraphPanelManager {
       case "sourceControl.request": {
         const sourceControl = await this.deps.detectSourceControl();
         this.post(panel, { type: "sourceControl.detected", sourceControl });
+        return;
+      }
+      case "node.openChat": {
+        const result = await this.deps.openNodeChat(msg.nodeId, msg.workflow);
+        if (!result.ok) {
+          this.post(panel, { type: "toast", level: "error", message: result.error ?? "Could not open node chat." });
+        }
         return;
       }
       case "node.run": {

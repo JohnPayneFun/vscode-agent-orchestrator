@@ -41594,7 +41594,7 @@
           role: "menu",
           "aria-label": `Actions for ${contextMenu.label}`,
           style: { left: contextMenu.x, top: contextMenu.y },
-          children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", onClick: viewContextNodeChat, children: "View chat" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("button", { type: "button", role: "menuitem", onClick: viewContextNodeChat, children: "Open chat window" })
         }
       ) : null
     ] });
@@ -42475,9 +42475,10 @@
       setSelectedNodeId(null);
       setSelectedEdgeId(null);
     };
-    const viewNodeChat = (id2) => {
+    const openNodeChat = (id2) => {
       selectNode(id2);
       setRunOutputFocusRequest((request) => request + 1);
+      send({ type: "node.openChat", nodeId: id2, workflow });
     };
     const updateNode = (next) => {
       setWorkflow((wf) => ({
@@ -42585,7 +42586,7 @@
           selectedEdgeId,
           onSelectNode: selectNode,
           onSelectEdge: selectEdge,
-          onViewNodeChat: viewNodeChat,
+          onViewNodeChat: openNodeChat,
           onClearSelection: clearSelection,
           onMove: moveNode,
           onAddEdge: addEdge2,
@@ -42606,7 +42607,14 @@
           }
         ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeActivityPanel, { activity: selectedActivity }),
-        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeRunOutputPanel, { output: selectedRunOutput, panelRef: runOutputPanelRef }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
+          NodeRunOutputPanel,
+          {
+            output: selectedRunOutput,
+            panelRef: runOutputPanelRef,
+            onOpenChat: () => openNodeChat(selectedNode.id)
+          }
+        ),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeUsagePanel, { usage: selectedUsage ?? emptyUsage() }),
         /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(NodeToolUsagePanel, { usage: selectedToolUsage ?? emptyToolUsage() })
       ] }) : selectedEdge ? /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
@@ -42670,10 +42678,17 @@
       /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(LedgerPanel, { entries: ledger })
     ] });
   }
-  function NodeRunOutputPanel({ output, panelRef }) {
+  function NodeRunOutputPanel({
+    output,
+    panelRef,
+    onOpenChat
+  }) {
     const text = output?.chunks.join("") ?? "";
     return /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { ref: panelRef, className: "activity-panel run-output-panel", tabIndex: -1, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Run Output" }),
+      /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "panel-heading-row", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("h3", { children: "Run Output" }),
+        /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("button", { type: "button", className: "secondary compact", onClick: onOpenChat, children: "Open chat" })
+      ] }),
       output ? /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)(import_jsx_runtime6.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("p", { className: "field-note", children: [
           output.status,

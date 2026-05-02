@@ -313,7 +313,7 @@ function GraphViewInner({
           aria-label={`Actions for ${contextMenu.label}`}
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
-          <button type="button" role="menuitem" onClick={viewContextNodeChat}>View chat</button>
+          <button type="button" role="menuitem" onClick={viewContextNodeChat}>Open chat window</button>
         </div>
       ) : null}
     </div>
