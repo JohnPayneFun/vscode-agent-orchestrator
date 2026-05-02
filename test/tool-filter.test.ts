@@ -55,8 +55,12 @@ test("tool filter accepts wildcard block patterns", () => {
 test("background safe mode blocks confirmation-heavy tools", () => {
   const blocked = resolveBackgroundBlockedTools("safe");
   assert.equal(isBlockedToolName("run_in_terminal", blocked), true);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_run_query_or_mutation_on_any_monday_com_api", blocked), true);
+  assert.equal(isBlockedToolName("activate_graphql_api_tools", blocked), true);
   assert.equal(isBlockedToolName("mcp_com_monday_mo_create_update", blocked), true);
   assert.equal(isBlockedToolName("mcp_com_monday_mo_get_assets", blocked), false);
+  assert.equal(isBlockedToolName("mcp_com_monday_mo_get_type_details", blocked), false);
+  assert.equal(isBlockedToolName("read_file", blocked), false);
   assert.deepEqual(resolveBackgroundBlockedTools("all"), []);
 });
 

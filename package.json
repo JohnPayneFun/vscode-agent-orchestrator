@@ -128,7 +128,7 @@
             "safe",
             "all"
           ],
-          "description": "Tool exposure policy for background extension-host runs. safe hides confirmation-heavy tools such as terminal commands and Monday.com mutations to avoid modal permission popups; all exposes every tool allowed by blockedTools and maxToolsPerRequest. Native chat dispatch still shows tool confirmations inline."
+          "description": "Tool exposure policy for background extension-host runs. safe hides confirmation-heavy tools such as terminal commands and mutation-capable MCP tools to avoid modal permission popups; all exposes every tool allowed by blockedTools and maxToolsPerRequest. Native Chat Bypass Approvals applies only to chat dispatch, not background runs."
         },
         "vscodeAgentOrchestrator.blockedTools": {
           "type": "array",

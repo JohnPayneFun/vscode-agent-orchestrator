@@ -17319,6 +17319,29 @@ var DEFAULT_BLOCKED_TOOL_NAMES = [
   "execution_subagent"
 ];
 var DEFAULT_BACKGROUND_BLOCKED_TOOL_NAMES = [
+  "*mutation*",
+  "*query_or_mutation*",
+  "*create*",
+  "*update*",
+  "*change*",
+  "*delete*",
+  "*move*",
+  "*write*",
+  "*edit*",
+  "*run*",
+  "*execute*",
+  "*install*",
+  "*_set_*",
+  "set_*",
+  "*patch*",
+  "*apply*",
+  "*insert*",
+  "*replace*",
+  "*upload*",
+  "activate_graphql_api_tools",
+  "activate_board_creation_and_management_tools",
+  "activate_object_movement_and_update_tools",
+  "activate_document_management_tools",
   "run_in_terminal",
   "send_to_terminal",
   "kill_terminal",
@@ -18061,7 +18084,7 @@ var Dispatcher = class {
             toolRoundLimit,
             blockedTools,
             maxToolsPerRequest,
-            toolModeNotice: backgroundToolMode === "safe" ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Use native chat dispatch or set vscodeAgentOrchestrator.backgroundToolMode to all for those tools." : void 0
+            toolModeNotice: backgroundToolMode === "safe" ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Chat Bypass Approvals does not apply to background tool calls; use native chat dispatch for bypass/inline approval workflows, or set vscodeAgentOrchestrator.backgroundToolMode to all if modal prompts are acceptable." : void 0
           })
         },
         node,

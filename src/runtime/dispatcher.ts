@@ -167,7 +167,7 @@ export class Dispatcher {
             blockedTools,
             maxToolsPerRequest,
             toolModeNotice: backgroundToolMode === "safe"
-              ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Use native chat dispatch or set vscodeAgentOrchestrator.backgroundToolMode to all for those tools."
+              ? "Background safe tool mode is enabled, so approval-heavy tools such as terminal commands and Monday.com mutations are hidden. Chat Bypass Approvals does not apply to background tool calls; use native chat dispatch for bypass/inline approval workflows, or set vscodeAgentOrchestrator.backgroundToolMode to all if modal prompts are acceptable."
               : undefined
           })
         },
