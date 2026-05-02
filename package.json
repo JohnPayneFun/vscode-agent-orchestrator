@@ -110,6 +110,13 @@
           "maximum": 200,
           "description": "Maximum language-model tool-call rounds per orchestrated node run. Raise this for long implementation, PR, or MCP workflows. Repeated failed tool calls are stopped separately."
         },
+        "vscodeAgentOrchestrator.maxToolsPerRequest": {
+          "type": "number",
+          "default": 128,
+          "minimum": 1,
+          "maximum": 128,
+          "description": "Maximum number of tools to advertise to the model in a single request. VS Code currently rejects requests with more than 128 tools, so this cannot be unlimited."
+        },
         "vscodeAgentOrchestrator.blockedTools": {
           "type": "array",
           "default": [

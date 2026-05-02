@@ -13,7 +13,7 @@ import {
 } from "./node-runner.js";
 import { retryQuery, scheduleRetryChat } from "./retry-chat.js";
 import { saveRetryState, takeLatestRetryStateForNode } from "./retry-state.js";
-import { DEFAULT_BLOCKED_TOOL_NAMES, exposedTools } from "./tool-filter.js";
+import { DEFAULT_BLOCKED_TOOL_NAMES, DEFAULT_MAX_TOOLS_PER_REQUEST, selectExposedTools } from "./tool-filter.js";
 import { parseUsageLimitRetry } from "./usage-limit.js";
 
 const DEFAULT_TOOL_ROUND_LIMIT = 64;
@@ -204,9 +204,10 @@ async function runNode(args: RunArgs): Promise<vscode.ChatResult> {
   const config = vscode.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = resolveToolRoundLimit(node.toolRoundLimit, config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+  const maxToolsPerRequest = config.get<number>("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools }) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest }) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -367,10 +368,11 @@ export interface VsCodeModelProviderArgs {
   token: vscode.CancellationToken;
   toolRoundLimit: number;
   blockedTools: readonly string[];
+  maxToolsPerRequest: number;
 }
 
 export function createVsCodeModelProvider(args: VsCodeModelProviderArgs): RuntimeModelProvider {
-  const { request, stream, token, toolRoundLimit, blockedTools } = args;
+  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest } = args;
   return {
     async selectModel(selector: ModelSelector | undefined) {
       const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
@@ -394,7 +396,13 @@ export function createVsCodeModelProvider(args: VsCodeModelProviderArgs): Runtim
         },
         async *sendRequest(messages: RuntimeChatMessage[]) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = exposedTools(vscode.lm.tools, blockedTools).map(toLanguageModelChatTool);
+          const toolSelection = selectExposedTools(vscode.lm.tools, blockedTools, maxToolsPerRequest);
+          if (toolSelection.capped) {
+            stream?.progress(
+              `Using ${toolSelection.tools.length} of ${toolSelection.availableCount} available tools; ${toolSelection.omittedCount} were hidden to stay under VS Code's ${toolSelection.limit}-tool request limit.`
+            );
+          }
+          const tools = toolSelection.tools.map(toLanguageModelChatTool);
           const failedToolCalls = new Map<string, number>();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(

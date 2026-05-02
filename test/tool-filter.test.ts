@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { exposedTools, isBlockedToolName } from "../src/runtime/tool-filter.js";
+import { exposedTools, isBlockedToolName, selectExposedTools } from "../src/runtime/tool-filter.js";
 
 test("tool filter blocks Copilot file mutation tools", () => {
   assert.equal(isBlockedToolName("copilot_createFile"), true);
@@ -44,4 +44,27 @@ test("tool filter accepts a custom blocklist", () => {
   ], ["read_file"]);
 
   assert.deepEqual(tools.map((tool) => tool.name), ["manage_todo_list"]);
+});
+
+test("tool filter caps advertised tools before model requests", () => {
+  const tools = Array.from({ length: 140 }, (_, index) => ({ name: `tool_${index}` }));
+  const selection = selectExposedTools(tools);
+
+  assert.equal(selection.tools.length, 128);
+  assert.equal(selection.availableCount, 140);
+  assert.equal(selection.omittedCount, 12);
+  assert.equal(selection.capped, true);
+});
+
+test("tool filter prioritizes workspace and Monday tools when capped", () => {
+  const tools = [
+    { name: "misc_0" },
+    { name: "misc_1" },
+    { name: "mcp_com_monday_mo_search" },
+    { name: "read_file" },
+    { name: "grep_search" }
+  ];
+  const selection = selectExposedTools(tools, [], 3);
+
+  assert.deepEqual(selection.tools.map((tool) => tool.name), ["mcp_com_monday_mo_search", "read_file", "grep_search"]);
 });

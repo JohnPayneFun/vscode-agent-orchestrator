@@ -17275,6 +17275,7 @@ async function openRetryChat(query) {
 }
 
 // src/runtime/tool-filter.ts
+var DEFAULT_MAX_TOOLS_PER_REQUEST = 128;
 var DEFAULT_BLOCKED_TOOL_NAMES = [
   "copilot_createfile",
   "copilot_editfile",
@@ -17287,8 +17288,37 @@ var DEFAULT_BLOCKED_TOOL_NAMES = [
   "update_plan",
   "execution_subagent"
 ];
+var PRIORITY_TOOL_PREFIXES = [
+  "read_",
+  "grep_",
+  "file_",
+  "semantic_",
+  "list_",
+  "get_",
+  "run_in_terminal",
+  "send_to_terminal",
+  "terminal_",
+  "github_",
+  "mcp_com_monday_",
+  "mcp_com_github_"
+];
 function exposedTools(tools, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
   return tools.filter((tool) => !isBlockedToolName(tool.name, blockedToolNames));
+}
+function selectExposedTools(tools, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES, maxTools = DEFAULT_MAX_TOOLS_PER_REQUEST) {
+  const available = exposedTools(tools, blockedToolNames);
+  const limit = clampToolLimit(maxTools);
+  if (available.length <= limit) {
+    return { tools: available, availableCount: available.length, omittedCount: 0, limit, capped: false };
+  }
+  const prioritized = available.map((tool, index) => ({ tool, index, priority: toolPriority(tool.name) })).sort((left, right) => left.priority - right.priority || left.index - right.index).slice(0, limit).sort((left, right) => left.index - right.index).map((entry) => entry.tool);
+  return {
+    tools: prioritized,
+    availableCount: available.length,
+    omittedCount: available.length - prioritized.length,
+    limit,
+    capped: true
+  };
 }
 function isBlockedToolName(name, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) {
   return new Set(blockedToolNames.map(normalizeToolName)).has(normalizeToolName(name));
@@ -17296,6 +17326,15 @@ function isBlockedToolName(name, blockedToolNames = DEFAULT_BLOCKED_TOOL_NAMES) 
 function normalizeToolName(name) {
   const lowerName = name.toLowerCase();
   return lowerName.includes(".") ? lowerName.slice(lowerName.lastIndexOf(".") + 1) : lowerName;
+}
+function clampToolLimit(value) {
+  if (!Number.isFinite(value)) return DEFAULT_MAX_TOOLS_PER_REQUEST;
+  return Math.max(1, Math.min(DEFAULT_MAX_TOOLS_PER_REQUEST, Math.floor(value)));
+}
+function toolPriority(name) {
+  const normalized = normalizeToolName(name);
+  const prefixIndex = PRIORITY_TOOL_PREFIXES.findIndex((prefix) => normalized.startsWith(prefix));
+  return prefixIndex === -1 ? PRIORITY_TOOL_PREFIXES.length : prefixIndex;
 }
 
 // src/runtime/usage-limit.ts
@@ -17453,9 +17492,10 @@ async function runNode(args) {
   const config = vscode2.workspace.getConfiguration("vscodeAgentOrchestrator");
   const toolRoundLimit = resolveToolRoundLimit(node.toolRoundLimit, config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT));
   const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+  const maxToolsPerRequest = config.get("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
   try {
     const result = await runWorkflowNode({
-      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools }) },
+      deps: { ...deps, modelProvider: createVsCodeModelProvider({ request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest }) },
       node,
       userText,
       history: chatHistoryToRuntimeMessages(ctx),
@@ -17597,7 +17637,7 @@ function chatHistoryToRuntimeMessages(ctx) {
   return messages;
 }
 function createVsCodeModelProvider(args) {
-  const { request, stream, token, toolRoundLimit, blockedTools } = args;
+  const { request, stream, token, toolRoundLimit, blockedTools, maxToolsPerRequest } = args;
   return {
     async selectModel(selector) {
       const model = await selectModel(toLanguageModelSelector(selector), request?.model, stream);
@@ -17621,7 +17661,13 @@ function createVsCodeModelProvider(args) {
         },
         async *sendRequest(messages) {
           const requestMessages = messages.map(toVsCodeMessage);
-          const tools = exposedTools(vscode2.lm.tools, blockedTools).map(toLanguageModelChatTool);
+          const toolSelection = selectExposedTools(vscode2.lm.tools, blockedTools, maxToolsPerRequest);
+          if (toolSelection.capped) {
+            stream?.progress(
+              `Using ${toolSelection.tools.length} of ${toolSelection.availableCount} available tools; ${toolSelection.omittedCount} were hidden to stay under VS Code's ${toolSelection.limit}-tool request limit.`
+            );
+          }
+          const tools = toolSelection.tools.map(toLanguageModelChatTool);
           const failedToolCalls = /* @__PURE__ */ new Map();
           for (let round = 0; round < toolRoundLimit; round++) {
             const response = await model.sendRequest(
@@ -17924,6 +17970,7 @@ var Dispatcher = class {
       config.get("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT2)
     );
     const blockedTools = config.get("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+    const maxToolsPerRequest = config.get("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
     this.inFlight++;
     try {
       await runWorkflowNode({
@@ -17936,7 +17983,8 @@ var Dispatcher = class {
           modelProvider: createVsCodeModelProvider({
             token: tokenSource.token,
             toolRoundLimit,
-            blockedTools
+            blockedTools,
+            maxToolsPerRequest
           })
         },
         node,

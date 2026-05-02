@@ -7,7 +7,7 @@ import { createVsCodeModelProvider, resolveToolRoundLimit } from "./chat-partici
 import { scheduledDispatchDownstreamState } from "./downstream-state.js";
 import { runWorkflowNode, WorkflowNodeRunError } from "./node-runner.js";
 import { saveRetryState } from "./retry-state.js";
-import { DEFAULT_BLOCKED_TOOL_NAMES } from "./tool-filter.js";
+import { DEFAULT_BLOCKED_TOOL_NAMES, DEFAULT_MAX_TOOLS_PER_REQUEST } from "./tool-filter.js";
 import { parseUsageLimitRetry } from "./usage-limit.js";
 
 export interface DispatchContext {
@@ -116,6 +116,7 @@ export class Dispatcher {
       config.get<number>("toolRoundLimit", DEFAULT_TOOL_ROUND_LIMIT)
     );
     const blockedTools = config.get<string[]>("blockedTools", [...DEFAULT_BLOCKED_TOOL_NAMES]);
+    const maxToolsPerRequest = config.get<number>("maxToolsPerRequest", DEFAULT_MAX_TOOLS_PER_REQUEST);
 
     this.inFlight++;
     try {
@@ -129,7 +130,8 @@ export class Dispatcher {
           modelProvider: createVsCodeModelProvider({
             token: tokenSource.token,
             toolRoundLimit,
-            blockedTools
+            blockedTools,
+            maxToolsPerRequest
           })
         },
         node,
